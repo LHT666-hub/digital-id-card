@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>游民家园 - 创世居民 SBT 铸造站</title>
+<style>
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#07070c;
+    --card-bg:rgba(255,255,255,0.06);
+    --card-border:rgba(255,255,255,0.12);
+    --text:#f0f0f5;
+    --text-secondary:rgba(255,255,255,0.5);
+    --accent:#4facfe;
+    --accent-end:#00f2fe;
+    --glow:rgba(79,172,254,0.35);
+    --radius:20px;
+    --radius-lg:28px;
+    --radius-pill:999px;
+    --transition:0.45s cubic-bezier(0.4,0,0.2,1);
+  }
+  @font-face{font-family:'SF';src:local('SF Pro Display'),local('SF Pro Text'),local('-apple-system'),local('BlinkMacSystemFont'),local('Segoe UI'),local('Helvetica Neue')}
+  html{font-size:16px}
+  body{
+    min-height:100vh;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'SF',-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,'PingFang SC','Noto Sans SC',sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    position:relative;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  /* ── 背景网格 ──────────────────────────── */
+  .bg-grid{
+    position:fixed;
+    inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size:60px 60px;
+    mask-image:radial-gradient(ellipse 70% 60% at 50% 50%, black 20%, transparent 100%);
+    -webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 50%, black 20%, transparent 100%);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  /* ── 背景光球 ─────────────────────────── */
+  .orb{
+    position:fixed;
+    border-radius:50%;
+    filter:blur(120px);
+    opacity:.4;
+    pointer-events:none;
+    will-change:transform;
+    transition:background 1s ease;
+  }
+  .orb-1{width:600px;height:600px;background:radial-gradient(circle,#4facfe 0%,transparent 70%);top:-15%;left:-10%;animation:drift1 18s ease-in-out infinite alternate}
+  .orb-2{width:550px;height:550px;background:radial-gradient(circle,#a855f7 0%,transparent 70%);bottom:-15%;right:-8%;animation:drift2 22s ease-in-out infinite alternate}
+  .orb-3{width:400px;height:400px;background:radial-gradient(circle,#00f2fe 0%,transparent 70%);top:45%;left:50%;animation:drift3 26s ease-in-out infinite alternate}
+
+  @keyframes drift1{0%{transform:translate(0,0) scale(1)}100%{transform:translate(80px,60px) scale(1.15)}}
+  @keyframes drift2{0%{transform:translate(0,0) scale(1)}100%{transform:translate(-70px,-50px) scale(1.1)}}
+  @keyframes drift3{0%{transform:translate(0,0) scale(0.9)}100%{transform:translate(-40px,70px) scale(1.05)}}
+
+  /* ── 主容器（居中单栏）──────────────── */
+  .container{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    max-width:520px;
+    padding:40px 24px;
+    position:relative;
+    z-index:1;
+    transition:opacity .5s ease, transform .5s ease;
+  }
+
+  /* ── 标题区 ──────────────────────────── */
+  .hero-section{
+    text-align:center;
+    margin-bottom:40px;
+  }
+  .hero-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 16px;
+    border-radius:var(--radius-pill);
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.08);
+    font-size:.7rem;
+    font-weight:500;
+    color:var(--text-secondary);
+    letter-spacing:.04em;
+    margin-bottom:20px;
+    backdrop-filter:blur(12px);
+  }
+  .hero-badge .hb-dot{
+    width:6px;height:6px;
+    border-radius:50%;
+    background:var(--accent);
+    animation:dotPulse 2s ease-in-out infinite;
+  }
+  .page-title{
+    font-size:2.2rem;
+    font-weight:800;
+    letter-spacing:-.04em;
+    line-height:1.2;
+    background:linear-gradient(135deg,#ffffff 0%,#4facfe 50%,#a855f7 100%);
+    background-size:200% 200%;
+    animation:titleShift 8s ease-in-out infinite;
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    margin-bottom:12px;
+  }
+  @keyframes titleShift{
+    0%,100%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+  }
+  .page-subtitle{
+    font-size:.88rem;
+    font-weight:400;
+    color:var(--text-secondary);
+    letter-spacing:.01em;
+  }
+
+  /* ── 毛玻璃表单卡 ───────────────────── */
+  .form-card-wrap{
+    position:relative;
+    width:100%;
+    border-radius:var(--radius-lg);
+    padding:2px;
+  }
+  .form-card-wrap::before{
+    content:'';
+    position:absolute;
+    inset:0;
+    border-radius:var(--radius-lg);
+    background:conic-gradient(
+      from 0deg,
+      rgba(79,172,254,0.4),
+      rgba(168,85,247,0.4),
+      rgba(0,242,254,0.3),
+      rgba(79,172,254,0.1),
+      rgba(168,85,247,0.4),
+      rgba(79,172,254,0.4)
+    );
+    animation:borderSpin 6s linear infinite;
+    z-index:0;
+    opacity:.6;
+  }
+  @keyframes borderSpin{
+    0%{filter:hue-rotate(0deg)}
+    100%{filter:hue-rotate(360deg)}
+  }
+  .form-card{
+    position:relative;
+    z-index:1;
+    background:rgba(12,12,20,0.85);
+    backdrop-filter:blur(40px) saturate(1.4);
+    -webkit-backdrop-filter:blur(40px) saturate(1.4);
+    border-radius:calc(var(--radius-lg) - 2px);
+    padding:40px 36px;
+    display:flex;
+    flex-direction:column;
+    gap:28px;
+    box-shadow:
+      0 20px 60px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      inset 0 -1px 0 rgba(255,255,255,0.03);
+  }
+  .form-card-wrap .card-shine{
+    position:absolute;
+    inset:2px;
+    border-radius:calc(var(--radius-lg) - 2px);
+    background:linear-gradient(
+      105deg,
+      transparent 40%,
+      rgba(255,255,255,0.03) 45%,
+      rgba(255,255,255,0.06) 50%,
+      rgba(255,255,255,0.03) 55%,
+      transparent 60%
+    );
+    background-size:200% 100%;
+    animation:cardShine 5s ease-in-out infinite;
+    pointer-events:none;
+    z-index:2;
+  }
+  @keyframes cardShine{
+    0%{background-position:200% 0}
+    100%{background-position:-200% 0}
+  }
+
+  /* 输入框 */
+  .input-group{display:flex;flex-direction:column;gap:8px}
+  .input-label{
+    font-size:.7rem;
+    color:var(--text-secondary);
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    font-weight:500;
+  }
+  .input-field{
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:16px;
+    padding:18px 22px;
+    font-size:1.05rem;
+    color:var(--text);
+    outline:none;
+    transition:border var(--transition),box-shadow var(--transition),background var(--transition);
+    font-family:inherit;
+    letter-spacing:.01em;
+  }
+  .input-field::placeholder{color:rgba(255,255,255,0.2);font-weight:400}
+  .input-field:focus{
+    border-color:rgba(79,172,254,0.5);
+    background:rgba(255,255,255,0.06);
+    box-shadow:0 0 0 4px rgba(79,172,254,0.1), 0 4px 20px rgba(79,172,254,0.08);
+  }
+
+  /* 部门选择 */
+  .dept-group{display:flex;flex-direction:column;gap:10px}
+  .dept-label{
+    font-size:.7rem;
+    color:var(--text-secondary);
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    font-weight:500;
+  }
+  .pills{display:flex;flex-wrap:wrap;gap:10px}
+  .pill{
+    position:relative;
+    cursor:pointer;
+  }
+  .pill input{position:absolute;opacity:0;pointer-events:none}
+  .pill-label{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:11px 20px;
+    border-radius:var(--radius-pill);
+    font-size:.84rem;
+    font-weight:500;
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.08);
+    color:rgba(255,255,255,0.55);
+    transition:all var(--transition);
+    user-select:none;
+    white-space:nowrap;
+  }
+  .pill-label:hover{
+    background:rgba(255,255,255,0.07);
+    color:rgba(255,255,255,0.8);
+    border-color:rgba(255,255,255,0.14);
+  }
+  .pill-label .dot{
+    width:8px;height:8px;
+    border-radius:50%;
+    transition:all var(--transition);
+    flex-shrink:0;
+    opacity:.6;
+  }
+  .pill input:checked+.pill-label .dot{opacity:1}
+
+  .pill input:checked+.pill-label{
+    color:#fff;
+    border-color:transparent;
+    box-shadow:0 4px 24px var(--glow);
+    transform:scale(1.04);
+  }
+
+  /* 部门对应色 */
+  .pill[data-dept="strategy"] .dot{background:#34d399}
+  .pill[data-dept="strategy"] input:checked+.pill-label{background:linear-gradient(135deg,#059669,#34d399);--glow:rgba(52,211,153,0.3)}
+
+  .pill[data-dept="copywriting"] .dot{background:#22d3ee}
+  .pill[data-dept="copywriting"] input:checked+.pill-label{background:linear-gradient(135deg,#0891b2,#22d3ee);--glow:rgba(34,211,238,0.3)}
+
+  .pill[data-dept="event"] .dot{background:#fb923c}
+  .pill[data-dept="event"] input:checked+.pill-label{background:linear-gradient(135deg,#ea580c,#fb923c);--glow:rgba(251,146,60,0.3)}
+
+  .pill[data-dept="tech"] .dot{background:#60a5fa}
+  .pill[data-dept="tech"] input:checked+.pill-label{background:linear-gradient(135deg,#2563eb,#60a5fa);--glow:rgba(96,165,250,0.3)}
+
+  .pill[data-dept="design"] .dot{background:#c084fc}
+  .pill[data-dept="design"] input:checked+.pill-label{background:linear-gradient(135deg,#9333ea,#c084fc);--glow:rgba(192,132,252,0.3)}
+
+  /* 主按钮 */
+  .mint-btn{
+    position:relative;
+    width:100%;
+    padding:18px 32px;
+    border:none;
+    border-radius:16px;
+    font-size:1.05rem;
+    font-weight:600;
+    color:#fff;
+    cursor:pointer;
+    font-family:inherit;
+    overflow:hidden;
+    transition:transform .3s ease,box-shadow .3s ease;
+    background:linear-gradient(135deg,var(--accent),#a855f7,var(--accent-end));
+    background-size:200% 200%;
+    animation:btnGrad 4s ease-in-out infinite;
+    box-shadow:0 8px 36px rgba(79,172,254,0.25), 0 2px 8px rgba(0,0,0,0.3);
+    letter-spacing:.02em;
+  }
+  @keyframes btnGrad{
+    0%,100%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+  }
+  .mint-btn:hover{transform:translateY(-2px);box-shadow:0 12px 44px rgba(79,172,254,0.35)}
+  .mint-btn:active{transform:translateY(0) scale(0.98)}
+  .mint-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+  .mint-btn .shimmer{
+    position:absolute;inset:0;
+    background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.15) 50%,transparent 60%);
+    transform:translateX(-100%);
+    animation:shimmer 3s ease-in-out infinite;
+  }
+  @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+
+  /* Toast */
+  .toast{
+    position:fixed;
+    bottom:40px;
+    left:50%;
+    transform:translateX(-50%) translateY(20px);
+    padding:14px 28px;
+    border-radius:16px;
+    background:rgba(12,12,20,0.8);
+    backdrop-filter:blur(24px);
+    -webkit-backdrop-filter:blur(24px);
+    border:1px solid rgba(255,255,255,0.1);
+    font-size:.85rem;
+    color:var(--text);
+    opacity:0;
+    pointer-events:none;
+    transition:all .45s ease;
+    z-index:100;
+  }
+  .toast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+  }
+
+  /* ── 过场加载层 ─────────────────────── */
+  .loading-overlay{
+    position:fixed;
+    inset:0;
+    z-index:50;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:32px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .6s ease;
+  }
+  .loading-overlay.active{
+    opacity:1;
+    pointer-events:auto;
+  }
+  .loading-text{
+    font-size:1.25rem;
+    font-weight:600;
+    letter-spacing:.01em;
+    text-align:center;
+    min-height:1.6em;
+    background:linear-gradient(135deg,#fff 30%,rgba(255,255,255,.6));
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+  }
+  .loading-text.swap{
+    animation:textSwap .5s ease;
+  }
+  @keyframes textSwap{
+    0%{opacity:0;transform:translateY(12px);filter:blur(4px)}
+    100%{opacity:1;transform:translateY(0);filter:blur(0)}
+  }
+  /* 脉冲光点 */
+  .loading-dots{
+    display:flex;
+    gap:10px;
+  }
+  .loading-dots span{
+    width:8px;height:8px;
+    border-radius:50%;
+    background:var(--accent);
+    opacity:.35;
+    animation:dotPulse 1.2s ease-in-out infinite;
+  }
+  .loading-dots span:nth-child(2){animation-delay:.2s}
+  .loading-dots span:nth-child(3){animation-delay:.4s}
+  @keyframes dotPulse{
+    0%,100%{opacity:.2;transform:scale(.8)}
+    50%{opacity:1;transform:scale(1.3)}
+  }
+
+  /* 阶段淡出 */
+  .container.fade-out{
+    opacity:0;
+    transform:scale(0.97);
+    transition:opacity .5s ease, transform .5s ease;
+    pointer-events:none;
+  }
+
+  /* ── 结果身份证 ─────────────────────── */
+  .result-overlay{
+    position:fixed;
+    inset:0;
+    z-index:60;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .6s ease;
+  }
+  .result-overlay.active{
+    opacity:1;
+    pointer-events:auto;
+  }
+
+  .result-card{
+    position:relative;
+    width:480px;
+    max-width:92vw;
+    border-radius:32px;
+    padding:48px 44px 40px;
+    backdrop-filter:blur(60px) saturate(1.6);
+    -webkit-backdrop-filter:blur(60px) saturate(1.6);
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.18);
+    box-shadow:
+      0 24px 80px rgba(0,0,0,0.4),
+      0 2px 0 rgba(255,255,255,0.1) inset,
+      0 -1px 0 rgba(255,255,255,0.05) inset;
+    display:flex;
+    flex-direction:column;
+    gap:28px;
+    transform:scale(0.6);
+    opacity:0;
+    transition:transform .7s cubic-bezier(0.16,1,0.3,1), opacity .5s ease;
+    overflow:hidden;
+    animation:resultFloat 5s ease-in-out infinite;
+    animation-play-state:paused;
+  }
+  .result-overlay.active .result-card{
+    transform:scale(1);
+    opacity:1;
+    animation-play-state:running;
+  }
+  @keyframes resultFloat{
+    0%,100%{transform:translateY(0) scale(1)}
+    50%{transform:translateY(-10px) scale(1)}
+  }
+
+  /* 全息反光 */
+  .result-card::before{
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;
+    height:5px;
+    border-radius:32px 32px 0 0;
+    background:var(--result-topbar, linear-gradient(90deg,rgba(255,255,255,0.15),rgba(255,255,255,0.05)));
+  }
+  .result-card::after{
+    content:'';
+    position:absolute;
+    inset:0;
+    border-radius:32px;
+    background:linear-gradient(
+      105deg,
+      transparent 30%,
+      rgba(255,255,255,0.06) 40%,
+      rgba(255,255,255,0.12) 45%,
+      rgba(255,255,255,0.06) 50%,
+      transparent 60%
+    );
+    background-size:200% 100%;
+    animation:holoSheen 4s ease-in-out infinite;
+    pointer-events:none;
+    z-index:2;
+    mix-blend-mode:overlay;
+  }
+  @keyframes holoSheen{
+    0%{background-position:200% 0}
+    100%{background-position:-200% 0}
+  }
+
+  /* 彩虹光纹噪点 */
+  .holo-rainbow{
+    position:absolute;
+    inset:0;
+    border-radius:32px;
+    opacity:0.08;
+    background:linear-gradient(
+      135deg,
+      #ff0000 0%, #ff8800 14%, #ffff00 28%, #00ff00 42%,
+      #00ffff 57%, #0088ff 71%, #8800ff 85%, #ff0000 100%
+    );
+    background-size:300% 300%;
+    animation:rainbowMove 6s linear infinite;
+    pointer-events:none;
+    z-index:1;
+    mix-blend-mode:color-dodge;
+  }
+  @keyframes rainbowMove{
+    0%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+    100%{background-position:0% 50%}
+  }
+
+  /* 背景发光层 */
+  .result-glow{
+    position:absolute;
+    width:520px;height:520px;
+    border-radius:50%;
+    filter:blur(100px);
+    opacity:.45;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    pointer-events:none;
+    z-index:-1;
+    transition:background .6s ease;
+  }
+
+  /* 卡片内部内容 z-index */
+  .result-card > *:not(.holo-rainbow){
+    position:relative;
+    z-index:3;
+  }
+
+  .result-header{
+    display:flex;
+    align-items:center;
+    gap:16px;
+  }
+  .result-logo{
+    width:52px;height:52px;
+    border-radius:16px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.5rem;
+    flex-shrink:0;
+    transition:background .4s ease, box-shadow .4s ease;
+  }
+  .result-header-text h2{
+    font-size:1rem;
+    font-weight:600;
+    letter-spacing:-.01em;
+  }
+  .result-header-text p{
+    font-size:.7rem;
+    color:var(--text-secondary);
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    margin-top:2px;
+  }
+
+  .result-name{
+    font-size:2rem;
+    font-weight:800;
+    letter-spacing:-.03em;
+    line-height:1.2;
+    word-break:break-all;
+  }
+
+  .result-dept-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 18px;
+    border-radius:var(--radius-pill);
+    font-size:.9rem;
+    font-weight:600;
+    width:fit-content;
+    transition:all .4s ease;
+  }
+  .result-dept-badge .r-dot{
+    width:9px;height:9px;
+    border-radius:50%;
+  }
+
+  .result-divider{
+    border:none;
+    height:1px;
+    background:rgba(255,255,255,0.1);
+  }
+
+  /* 社会学状态区 */
+  .sociology-section{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .sociology-title{
+    font-size:.65rem;
+    color:var(--text-secondary);
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .sociology-stats{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .soc-stat{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .soc-stat .soc-label{
+    font-size:.8rem;
+    color:rgba(255,255,255,0.6);
+    min-width:140px;
+    flex-shrink:0;
+  }
+  .soc-stat .soc-bar-wrap{
+    flex:1;
+    height:6px;
+    border-radius:3px;
+    background:rgba(255,255,255,0.08);
+    overflow:hidden;
+  }
+  .soc-stat .soc-bar{
+    height:100%;
+    border-radius:3px;
+    transition:width 1.2s cubic-bezier(0.22,1,0.36,1);
+    width:0;
+  }
+  .soc-stat .soc-val{
+    font-size:.8rem;
+    font-weight:600;
+    min-width:48px;
+    text-align:right;
+  }
+  .soc-note{
+    font-size:.78rem;
+    color:rgba(255,255,255,0.45);
+    font-style:italic;
+    margin-top:2px;
+  }
+
+  /* 底部信息 */
+  .result-footer{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .result-footer .rf-label{
+    font-size:.6rem;
+    color:var(--text-secondary);
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  .result-footer .rf-hash{
+    font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;
+    font-size:.66rem;
+    color:rgba(255,255,255,0.35);
+  }
+  .result-footer .rf-date{
+    font-size:.72rem;
+    color:rgba(255,255,255,0.45);
+  }
+
+  .result-minted{
+    position:absolute;
+    top:18px;right:20px;
+    padding:5px 14px;
+    border-radius:var(--radius-pill);
+    font-size:.65rem;
+    font-weight:600;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    background:rgba(52,211,153,0.15);
+    color:#34d399;
+    border:1px solid rgba(52,211,153,0.3);
+    z-index:4;
+  }
+
+  /* ── 响应式 ──────────────────────────── */
+  @media(max-width:860px){
+    .container{max-width:420px}
+  }
+  @media(max-width:480px){
+    .container{padding:28px 16px}
+    .form-card{padding:28px 20px}
+    .pills{gap:8px}
+    .pill-label{padding:9px 14px;font-size:.78rem}
+    .page-title{font-size:1.6rem}
+    .result-card{padding:32px 24px 28px}
+    .result-name{font-size:1.5rem}
+  }
+</style>
+</head>
+<body>
+
+<!-- 背景网格 -->
+<div class="bg-grid"></div>
+
+<!-- 背景光球 -->
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+
+<div class="container" id="formContainer">
+
+  <!-- 标题区 -->
+  <div class="hero-section">
+    <div class="hero-badge"><span class="hb-dot"></span>Genesis Nomad Program</div>
+    <div class="page-title">游民家园：觉醒你的赛博分身</div>
+    <div class="page-subtitle">选择你的部门，铸造你的链上数字身份</div>
+  </div>
+
+  <!-- 毛玻璃表单卡 -->
+  <div class="form-card-wrap">
+    <div class="card-shine"></div>
+    <div class="form-card">
+
+      <div class="input-group">
+        <label class="input-label">游民代号</label>
+        <input type="text" class="input-field" id="nameInput" placeholder="输入你的游民代号" maxlength="24" autocomplete="off">
+      </div>
+
+      <div class="dept-group">
+        <label class="dept-label">选择部门</label>
+        <div class="pills">
+          <label class="pill" data-dept="strategy">
+            <input type="radio" name="dept" value="strategy">
+            <span class="pill-label"><span class="dot"></span>战略发展部</span>
+          </label>
+          <label class="pill" data-dept="copywriting">
+            <input type="radio" name="dept" value="copywriting">
+            <span class="pill-label"><span class="dot"></span>文案策划部</span>
+          </label>
+          <label class="pill" data-dept="event">
+            <input type="radio" name="dept" value="event">
+            <span class="pill-label"><span class="dot"></span>活动策划部</span>
+          </label>
+          <label class="pill" data-dept="tech">
+            <input type="radio" name="dept" value="tech">
+            <span class="pill-label"><span class="dot"></span>技术开发部</span>
+          </label>
+          <label class="pill" data-dept="design">
+            <input type="radio" name="dept" value="design">
+            <span class="pill-label"><span class="dot"></span>视觉设计部</span>
+          </label>
+        </div>
+      </div>
+
+      <button class="mint-btn" id="mintBtn">
+        <span class="shimmer"></span>
+        开启游民人生
+      </button>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- 过场加载层 -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-text" id="loadingText"></div>
+  <div class="loading-dots"><span></span><span></span><span></span></div>
+</div>
+
+<!-- 结果身份证 -->
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-glow" id="resultGlow"></div>
+  <div class="result-card" id="resultCard">
+    <div class="holo-rainbow"></div>
+    <div class="result-minted">✦ ON-CHAIN</div>
+    <div class="result-header">
+      <div class="result-logo" id="resultLogo">🏕</div>
+      <div class="result-header-text">
+        <h2>游民家园</h2>
+        <p>Digital Nomad ID Card</p>
+      </div>
+    </div>
+    <div class="result-name" id="resultName"></div>
+    <div class="result-dept-badge" id="resultDeptBadge">
+      <span class="r-dot" id="resultDot"></span>
+      <span id="resultDeptText"></span>
+    </div>
+    <hr class="result-divider">
+    <div class="sociology-section">
+      <div class="sociology-title">⚗ 今日社会学状态</div>
+      <div class="sociology-stats" id="socStats"></div>
+      <div class="soc-note" id="socNote"></div>
+    </div>
+    <hr class="result-divider">
+    <div class="result-footer">
+      <div><span class="rf-label">SBT Hash</span></div>
+      <span class="rf-hash" id="resultHash"></span>
+    </div>
+    <div class="result-footer">
+      <div><span class="rf-label">Mint Date</span></div>
+      <span class="rf-date" id="resultDate"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ── 部门主题映射 ───────────────────── */
+  const THEMES = {
+    strategy: {
+      name: '战略发展部',
+      gradient: 'linear-gradient(135deg, #059669, #34d399)',
+      glow: 'radial-gradient(circle, rgba(52,211,153,0.5), transparent 70%)',
+      badgeBg: 'rgba(52,211,153,0.12)',
+      badgeColor: '#34d399',
+      dotColor: '#34d399',
+      topBar: 'linear-gradient(90deg, #059669, #34d399)',
+      logoBg: 'linear-gradient(135deg, rgba(5,150,105,0.25), rgba(52,211,153,0.15))',
+      logoShadow: '0 0 24px rgba(52,211,153,0.25)',
+    },
+    copywriting: {
+      name: '文案策划部',
+      gradient: 'linear-gradient(135deg, #0891b2, #22d3ee)',
+      glow: 'radial-gradient(circle, rgba(34,211,238,0.5), transparent 70%)',
+      badgeBg: 'rgba(34,211,238,0.12)',
+      badgeColor: '#22d3ee',
+      dotColor: '#22d3ee',
+      topBar: 'linear-gradient(90deg, #0891b2, #22d3ee)',
+      logoBg: 'linear-gradient(135deg, rgba(8,145,178,0.25), rgba(34,211,238,0.15))',
+      logoShadow: '0 0 24px rgba(34,211,238,0.25)',
+    },
+    event: {
+      name: '活动策划部',
+      gradient: 'linear-gradient(135deg, #ea580c, #fb923c)',
+      glow: 'radial-gradient(circle, rgba(251,146,60,0.5), transparent 70%)',
+      badgeBg: 'rgba(251,146,60,0.12)',
+      badgeColor: '#fb923c',
+      dotColor: '#fb923c',
+      topBar: 'linear-gradient(90deg, #ea580c, #fb923c)',
+      logoBg: 'linear-gradient(135deg, rgba(234,88,12,0.25), rgba(251,146,60,0.15))',
+      logoShadow: '0 0 24px rgba(251,146,60,0.25)',
+    },
+    tech: {
+      name: '技术开发部',
+      gradient: 'linear-gradient(135deg, #2563eb, #60a5fa)',
+      glow: 'radial-gradient(circle, rgba(96,165,250,0.5), transparent 70%)',
+      badgeBg: 'rgba(96,165,250,0.12)',
+      badgeColor: '#60a5fa',
+      dotColor: '#60a5fa',
+      topBar: 'linear-gradient(90deg, #2563eb, #60a5fa)',
+      logoBg: 'linear-gradient(135deg, rgba(37,99,235,0.25), rgba(96,165,250,0.15))',
+      logoShadow: '0 0 24px rgba(96,165,250,0.25)',
+    },
+    design: {
+      name: '视觉设计部',
+      gradient: 'linear-gradient(135deg, #9333ea, #c084fc)',
+      glow: 'radial-gradient(circle, rgba(192,132,252,0.5), transparent 70%)',
+      badgeBg: 'rgba(192,132,252,0.12)',
+      badgeColor: '#c084fc',
+      dotColor: '#c084fc',
+      topBar: 'linear-gradient(90deg, #9333ea, #c084fc)',
+      logoBg: 'linear-gradient(135deg, rgba(147,51,234,0.25), rgba(192,132,252,0.15))',
+      logoShadow: '0 0 24px rgba(192,132,252,0.25)',
+    },
+  };
+
+  /* ── DOM ─────────────────────────────── */
+  const nameInput   = document.getElementById('nameInput');
+  const mintBtn     = document.getElementById('mintBtn');
+  const toast       = document.getElementById('toast');
+  const radios      = document.querySelectorAll('input[name="dept"]');
+
+  let currentDept = null;
+
+  /* ── 工具函数 ───────────────────────── */
+  function randomHash(){
+    const chars = '0123456789abcdef';
+    let h = '0x';
+    for(let i = 0; i < 40; i++) h += chars[Math.floor(Math.random() * 16)];
+    return h;
+  }
+
+  function formatHash(h){
+    return h.slice(0,6) + '…' + h.slice(-6);
+  }
+
+  function todayStr(){
+    const d = new Date();
+    return d.getFullYear() + '-' +
+      String(d.getMonth()+1).padStart(2,'0') + '-' +
+      String(d.getDate()).padStart(2,'0');
+  }
+
+  function showToast(msg, dur){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(()=> toast.classList.remove('show'), dur || 2800);
+  }
+
+  /* ── 部门切换 ───────────────────────── */
+  radios.forEach(function(radio){
+    radio.addEventListener('change', function(){
+      currentDept = this.value;
+    });
+  });
+
+  /* ── 社会学状态库 ─────────────────── */
+  const SOC_STATS_POOL = [
+    { label: '涂尔干失范指数', unit: '%', min: 0, max: 15 },
+    { label: '马克思异化程度', unit: '%', min: 0, max: 8 },
+    { label: '韦伯理性化水平', unit: '%', min: 60, max: 99 },
+    { label: '布迪厄资本积累', unit: '', min: 700, max: 9999, suffix: ' pts' },
+    { label: '鲍曼液态性指数', unit: '%', min: 50, max: 95 },
+    { label: '福柯微观权力抵抗值', unit: '%', min: 70, max: 100 },
+    { label: '德勒兹游牧强度', unit: '%', min: 80, max: 100 },
+    { label: '齐美尔社交距离', unit: '', min: 1, max: 10, suffix: ' AU' },
+    { label: '戈夫曼印象管理', unit: '%', min: 40, max: 99 },
+    { label: '哈贝马斯交往理性', unit: '%', min: 55, max: 98 },
+    { label: '梅洛庞蒂具身感知', unit: '%', min: 60, max: 95 },
+    { label: '本雅明灵韵浓度', unit: '%', min: 20, max: 88 },
+  ];
+  const SOC_NOTES_POOL = [
+    '附近性恢复中…请保持在场',
+    '检测到社会结构裂缝，正穿越中',
+    '数字灵韵已觉醒，请勿返回格子间',
+    '你已脱离规训社会，欢迎来到游牧空间',
+    '液态现代性运转正常，固态班味已清零',
+    '符号资本充裕，无需向甲方低头',
+    '社会角色切换完成：从打工人 → 游民',
+    '警告：你的异化指数已降至危险的低水平',
+  ];
+
+  function randInt(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+  function pickRandom(arr, n){
+    const a = arr.slice();
+    for(let i = a.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a.slice(0, n);
+  }
+
+  function generateSocStatus(){
+    const picked = pickRandom(SOC_STATS_POOL, 4);
+    return picked.map(function(s){
+      var val = randInt(s.min, s.max);
+      var pct = Math.round((val - s.min) / (s.max - s.min) * 100);
+      var display = s.suffix ? val + s.suffix : val + s.unit;
+      return { label: s.label, value: display, barPct: pct };
+    });
+  }
+
+  /* ── 结果卡 DOM ──────────────────────── */
+  const resultOverlay  = document.getElementById('resultOverlay');
+  const resultCard     = document.getElementById('resultCard');
+  const resultGlow     = document.getElementById('resultGlow');
+  const resultLogo     = document.getElementById('resultLogo');
+  const resultName     = document.getElementById('resultName');
+  const resultDeptBadge= document.getElementById('resultDeptBadge');
+  const resultDot      = document.getElementById('resultDot');
+  const resultDeptText = document.getElementById('resultDeptText');
+  const resultHash     = document.getElementById('resultHash');
+  const resultDate     = document.getElementById('resultDate');
+  const socStats       = document.getElementById('socStats');
+  const socNote        = document.getElementById('socNote');
+
+  function showResultCard(name, dept){
+    const t = THEMES[dept];
+    // 名字 & 部门
+    resultName.textContent = name;
+    resultDeptText.textContent = t.name;
+    resultDot.style.background = t.dotColor;
+    resultDeptBadge.style.background = t.badgeBg;
+    resultDeptBadge.style.color = t.badgeColor;
+
+    // 顶部渐变条 & logo
+    resultCard.style.setProperty('--result-topbar', t.topBar);
+    resultLogo.style.background = t.logoBg;
+    resultLogo.style.boxShadow = t.logoShadow;
+
+    // 卡片边框微光
+    resultCard.style.borderColor = t.badgeColor + '30';
+
+    // 背景发光
+    resultGlow.style.background = t.glow;
+
+    // 同步背景光球颜色
+    var orbEl1 = document.querySelector('.orb-1');
+    var orbEl2 = document.querySelector('.orb-2');
+    orbEl1.style.background = 'radial-gradient(circle,' + t.dotColor + ' 0%,transparent 70%)';
+    orbEl2.style.background = 'radial-gradient(circle,' + t.badgeColor + ' 0%,transparent 70%)';
+
+    // 哈希 & 日期
+    var h = randomHash();
+    resultHash.textContent = formatHash(h);
+    resultHash.title = h;
+    resultDate.textContent = todayStr();
+
+    // 社会学状态
+    var stats = generateSocStatus();
+    socStats.innerHTML = '';
+    var barColor = t.badgeColor;
+    stats.forEach(function(s){
+      var row = document.createElement('div');
+      row.className = 'soc-stat';
+      row.innerHTML =
+        '<span class="soc-label">' + s.label + '</span>' +
+        '<div class="soc-bar-wrap"><div class="soc-bar" style="background:' + barColor + ';"></div></div>' +
+        '<span class="soc-val" style="color:' + barColor + ';">' + s.value + '</span>';
+      socStats.appendChild(row);
+    });
+    socNote.textContent = pickRandom(SOC_NOTES_POOL, 1)[0];
+
+    // 显示
+    resultOverlay.classList.add('active');
+
+    // 延迟触发进度条动画
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        var bars = socStats.querySelectorAll('.soc-bar');
+        stats.forEach(function(s,i){
+          bars[i].style.width = s.barPct + '%';
+        });
+      });
+    });
+  }
+
+  /* ── 过场加载文案 ─────────────────── */
+  const LOADING_LINES = [
+    '正在切断传统打卡机连接...',
+    '正在清除职场班味...',
+    '正在加载戈夫曼前台面具...',
+    '游民身份生成中...',
+    '正在接入去中心化游民网络...',
+    '正在焚毁你的996工牌...',
+    '正在重写人生剧本...',
+    '正在唤醒你的赛博灵魂...',
+  ];
+
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const loadingText    = document.getElementById('loadingText');
+  const container      = document.getElementById('formContainer');
+
+  function shuffleArray(arr){
+    const a = arr.slice();
+    for(let i = a.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function runLoadingPhase(callback){
+    // 淡出表单
+    container.classList.add('fade-out');
+
+    setTimeout(function(){
+      // 显示加载层
+      loadingOverlay.classList.add('active');
+
+      const lines = shuffleArray(LOADING_LINES);
+      let idx = 0;
+      const total = lines.length;
+
+      function showLine(){
+        loadingText.textContent = lines[idx];
+        loadingText.classList.remove('swap');
+        void loadingText.offsetWidth;
+        loadingText.classList.add('swap');
+        idx++;
+      }
+
+      showLine();
+      const iv = setInterval(function(){
+        if(idx >= total){
+          clearInterval(iv);
+          // 加载完毕，隐藏加载层，执行回调
+          loadingOverlay.classList.remove('active');
+          setTimeout(function(){
+            if(callback) callback();
+          }, 400);
+          return;
+        }
+        showLine();
+      }, 800);
+    }, 500);
+  }
+
+  /* ── 铸造按钮 ───────────────────────── */
+  mintBtn.addEventListener('click', function(){
+    const name = nameInput.value.trim();
+    if(!name){
+      showToast('⚠ 请先输入你的游民代号');
+      nameInput.focus();
+      return;
+    }
+    if(!currentDept){
+      showToast('⚠ 请选择一个部门');
+      return;
+    }
+
+    // 禁止重复点击
+    mintBtn.disabled = true;
+
+    runLoadingPhase(function(){
+      showResultCard(name, currentDept);
+      mintBtn.disabled = false;
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
