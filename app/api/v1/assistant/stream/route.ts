@@ -7,6 +7,10 @@ import {
   buildAssistantActivity,
   presentAssistantActivity,
 } from "@/lib/assistant/activity";
+import {
+  buildContextualQuestion,
+  type AssistantConversationTurn,
+} from "@/lib/assistant/conversationContext";
 import { requiresVerifiedCurrentInfo } from "@/lib/assistant/verifiedCurrentInfo";
 import { buildAgentReply, inferServiceRequestFromQuestion } from "@/lib/agent";
 import { resolveCareSubject } from "@/lib/careSubjects";
@@ -20,8 +24,14 @@ import type { AskReply } from "@/lib/types";
 
 export const runtime = "nodejs";
 
+const conversationTurnSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().trim().min(1).max(2400),
+});
+
 const inputSchema = z.object({
-  question: z.string().trim().min(1).max(3000),
+  question: z.string().trim().min(1).max(6000),
+  conversation: z.array(conversationTurnSchema).max(12).optional(),
   residentId: z.string().uuid().optional(),
   serviceRequest: z.unknown().nullable().optional(),
   sourceContext: z.object({ type: z.literal("content"), id: z.string().uuid() }).optional(),
@@ -35,23 +45,39 @@ async function delegateToResolvedPipeline(
   request: NextRequest,
   body: z.infer<typeof inputSchema>,
 ) {
+  const contextualQuestion = buildContextualQuestion(
+    body.question,
+    body.conversation,
+  ).slice(0, 3000);
   const forwarded = new NextRequest(
     request.url.replace(/\/stream(?:\?.*)?$/, "/messages"),
     {
       method: "POST",
       headers: request.headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        question: contextualQuestion,
+        residentId: body.residentId,
+        serviceRequest: body.serviceRequest,
+        sourceContext: body.sourceContext,
+      }),
     },
   );
   return resolvedAssistantPost(forwarded);
 }
 
-function shouldUseResolvedPipeline(question: string) {
-  if (getGuardrailReply(question) || getGreetingReply(question)) return true;
-  if (requiresVerifiedCurrentInfo(question)) return true;
-  if (shouldSearchInstitutionalKnowledge(question)) return true;
+function shouldUseResolvedPipeline(
+  question: string,
+  conversation: AssistantConversationTurn[] | undefined,
+) {
+  const contextualQuestion = buildContextualQuestion(question, conversation);
+  if (getGuardrailReply(contextualQuestion) || getGreetingReply(question)) return true;
+  if (requiresVerifiedCurrentInfo(contextualQuestion)) return true;
+  if (shouldSearchInstitutionalKnowledge(contextualQuestion)) return true;
   return Boolean(
-    buildAgentReply(question, inferServiceRequestFromQuestion(question)),
+    buildAgentReply(
+      contextualQuestion,
+      inferServiceRequestFromQuestion(contextualQuestion),
+    ),
   );
 }
 
@@ -72,7 +98,11 @@ function generalReply(question: string, result: { answer: string; usedWebSearch:
   };
 }
 
-function streamGeneralWithoutPersistence(request: NextRequest, question: string) {
+function streamGeneralWithoutPersistence(
+  request: NextRequest,
+  question: string,
+  conversation: AssistantConversationTurn[] | undefined,
+) {
   const encoder = new TextEncoder();
   const inferredServiceRequest = inferServiceRequestFromQuestion(question);
   const stream = new ReadableStream<Uint8Array>({
@@ -93,6 +123,7 @@ function streamGeneralWithoutPersistence(request: NextRequest, question: string)
           emit("start", { model: "bailian", mode: "stream", persisted: false });
           const result = await streamBailianGeneralAnswer({
             question,
+            conversation,
             signal: request.signal,
             onDelta: (text) => emit("delta", { text }),
           });
@@ -155,14 +186,14 @@ export async function POST(request: NextRequest) {
   }
 
   const body = parsed.data;
-  if (body.sourceContext || shouldUseResolvedPipeline(body.question)) {
+  if (body.sourceContext || shouldUseResolvedPipeline(body.question, body.conversation)) {
     return delegateToResolvedPipeline(request, body);
   }
 
   const auth = await getApiAuthContext(request);
   if (!auth.supabase || !auth.profile) {
     if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
-      return streamGeneralWithoutPersistence(request, body.question);
+      return streamGeneralWithoutPersistence(request, body.question, body.conversation);
     }
     return delegateToResolvedPipeline(request, body);
   }
@@ -237,6 +268,7 @@ export async function POST(request: NextRequest) {
           emit("start", { model: "bailian", mode: "stream" });
           const result = await streamBailianGeneralAnswer({
             question,
+            conversation: body.conversation,
             memoryText: memoryText || undefined,
             signal: request.signal,
             onDelta: (text) => emit("delta", { text }),
