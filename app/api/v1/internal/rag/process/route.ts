@@ -5,7 +5,7 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function run(request: NextRequest) {
   const traceId = createTraceId();
   const secret = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -26,3 +26,6 @@ export async function POST(request: NextRequest) {
     return apiError("RAG_WORKER_FAILED", readErrorMessage(error), 500, traceId);
   }
 }
+
+export const GET = run;
+export const POST = run;
