@@ -9,12 +9,11 @@ type ServerVoiceState = "idle" | "preparing" | "recording" | "transcribing" | "e
 
 function preferredMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
-  return ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]
+  return ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]
     .find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
 export function HoldToTalkButton({ disabled = false, onTranscript, onFallback }: Props) {
-  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
   const browserSpeech = useSpeechRecognition();
   const [serverState, setServerState] = useState<ServerVoiceState>("idle");
   const [serverError, setServerError] = useState("");
@@ -106,7 +105,7 @@ export function HoldToTalkButton({ disabled = false, onTranscript, onFallback }:
     holdingRef.current = true;
     setSeconds(0);
     navigator.vibrate?.(18);
-    if (!demoMode && typeof navigator.mediaDevices?.getUserMedia === "function" && typeof MediaRecorder !== "undefined") {
+    if (typeof navigator.mediaDevices?.getUserMedia === "function" && typeof MediaRecorder !== "undefined") {
       serverModeRef.current = true;
       void startServerRecording();
     } else if (browserSpeech.isSupported()) {
@@ -116,7 +115,7 @@ export function HoldToTalkButton({ disabled = false, onTranscript, onFallback }:
       holdingRef.current = false;
       onFallback?.();
     }
-  }, [browserSpeech, demoMode, disabled, onFallback, serverState, startServerRecording]);
+  }, [browserSpeech, disabled, onFallback, serverState, startServerRecording]);
 
   const finish = useCallback(() => {
     if (!holdingRef.current) return;

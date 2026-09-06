@@ -55,6 +55,96 @@ function shouldUseResolvedPipeline(question: string) {
   );
 }
 
+function generalReply(question: string, result: { answer: string; usedWebSearch: boolean }): AskReply {
+  const personalHealthQuestion =
+    /(?:我|我的|最近|这几天|一直).{0,18}(?:血压|血糖|疼|痛|晕|咳|不舒服|症状|药)/.test(
+      question,
+    );
+  return {
+    answer: result.answer,
+    nextStep: result.usedWebSearch
+      ? "联网结果用于补充公开信息；涉及本地排班、号源、库存或个人诊疗，请以机构已审核信息和医生判断为准。"
+      : "如果涉及您个人的症状、用药或检查结果，可以继续补充具体情况；需要诊疗判断时请联系家庭医生。",
+    suggestDoctor: personalHealthQuestion,
+    riskLevel: "low",
+    category: result.usedWebSearch ? "联网问答" : "通用问答",
+    source: "model",
+  };
+}
+
+function streamGeneralWithoutPersistence(request: NextRequest, question: string) {
+  const encoder = new TextEncoder();
+  const inferredServiceRequest = inferServiceRequestFromQuestion(question);
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let closed = false;
+      const emit = (event: string, payload: unknown) => {
+        if (closed) return;
+        controller.enqueue(encoder.encode(sseEvent(event, payload)));
+      };
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        controller.close();
+      };
+
+      void (async () => {
+        try {
+          emit("start", { model: "bailian", mode: "stream", persisted: false });
+          const result = await streamBailianGeneralAnswer({
+            question,
+            signal: request.signal,
+            onDelta: (text) => emit("delta", { text }),
+          });
+          const reply = generalReply(question, result);
+          const actions = buildAssistantActions({
+            question,
+            reply,
+            serviceRequest: inferredServiceRequest,
+          });
+          emit("final", {
+            data: {
+              reply,
+              actions,
+              activity: null,
+              draft: inferredServiceRequest,
+              careSubject: null,
+              writePerformed: false,
+              rawTranscriptStored: false,
+              webSearchUsed: result.usedWebSearch,
+              model: result.model,
+              persisted: false,
+            },
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Claw 暂时无法回答";
+          emit("error", {
+            error: {
+              code: message.includes("NOT_CONFIGURED")
+                ? "AI_NOT_CONFIGURED"
+                : "ASSISTANT_STREAM_FAILED",
+              message: message.includes("NOT_CONFIGURED")
+                ? "百炼模型尚未正确配置，请检查 DASHSCOPE_API_KEY。"
+                : "模型连接暂时没有成功，请重试。",
+            },
+          });
+        } finally {
+          close();
+        }
+      })();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -71,6 +161,9 @@ export async function POST(request: NextRequest) {
 
   const auth = await getApiAuthContext(request);
   if (!auth.supabase || !auth.profile) {
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+      return streamGeneralWithoutPersistence(request, body.question);
+    }
     return delegateToResolvedPipeline(request, body);
   }
 
@@ -149,20 +242,7 @@ export async function POST(request: NextRequest) {
             onDelta: (text) => emit("delta", { text }),
           });
 
-          const personalHealthQuestion =
-            /(?:我|我的|最近|这几天|一直).{0,18}(?:血压|血糖|疼|痛|晕|咳|不舒服|症状|药)/.test(
-              question,
-            );
-          const reply: AskReply = {
-            answer: result.answer,
-            nextStep: result.usedWebSearch
-              ? "联网结果用于补充公开信息；涉及本地排班、号源、库存或个人诊疗，请以机构已审核信息和医生判断为准。"
-              : "如果涉及您个人的症状、用药或检查结果，可以继续补充具体情况；需要诊疗判断时请联系家庭医生。",
-            suggestDoctor: personalHealthQuestion,
-            riskLevel: "low",
-            category: result.usedWebSearch ? "联网问答" : "通用问答",
-            source: "model",
-          };
+          const reply = generalReply(question, result);
           const actions = buildAssistantActions({
             question,
             reply,
