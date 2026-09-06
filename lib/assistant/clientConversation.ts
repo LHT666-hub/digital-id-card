@@ -44,6 +44,11 @@ const STORE_KEY = "jiayi-claw-session-conversations-v2";
 const ACTIVE_KEY = "jiayi-claw-active-conversation-v2";
 const MAX_CONVERSATIONS = 20;
 const MAX_MESSAGES = 80;
+const DEFAULT_WELCOME_MESSAGE: ClientConversationMessage = {
+  id: "welcome",
+  role: "assistant",
+  text: "您好，直接告诉我您想办什么。我可以查已核验信息、整理预约或转诊诉求，并把下一步准备好给您确认。",
+};
 
 function hasSessionStorage() {
   return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
@@ -88,7 +93,7 @@ export function setActiveConversationId(id: string) {
 }
 
 export function createConversation(
-  welcomeMessage: ClientConversationMessage,
+  welcomeMessage: ClientConversationMessage = DEFAULT_WELCOME_MESSAGE,
 ): ClientConversation {
   const now = new Date().toISOString();
   const conversation: ClientConversation = {
@@ -96,7 +101,7 @@ export function createConversation(
     title: "新对话",
     createdAt: now,
     updatedAt: now,
-    messages: [welcomeMessage],
+    messages: [{ ...welcomeMessage }],
   };
   saveConversation(conversation);
   setActiveConversationId(conversation.id);
