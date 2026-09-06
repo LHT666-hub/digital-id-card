@@ -9,17 +9,30 @@ function schedulePendingKnowledgeIndex(traceId: string) {
 
   after(async () => {
     const supabase = createSupabaseServiceRoleClient();
-    if (!supabase) return;
+    if (!supabase) {
+      console.error("[rag-lazy-index] service role client is not configured", { traceId });
+      return;
+    }
 
     const requested = Number(process.env.RAG_LAZY_INDEX_BATCH ?? 2);
     const limit = Math.min(Math.max(Number.isFinite(requested) ? requested : 2, 1), 5);
     try {
-      await processPendingKnowledgeJobs({
+      const results = await processPendingKnowledgeJobs({
         supabase,
         traceId: `${traceId}:lazy-index`,
         limit,
       });
-    } catch {
+      console.info("[rag-lazy-index] batch completed", {
+        traceId,
+        claimed: results.length,
+        completed: results.filter((item) => item.ok).length,
+        failed: results.filter((item) => !item.ok).length,
+      });
+    } catch (error) {
+      console.error("[rag-lazy-index] batch failed", {
+        traceId,
+        message: error instanceof Error ? error.message : String(error),
+      });
       // Index refresh must never turn a successful public-info read into an
       // application error. Failed jobs retain retry metadata in Supabase.
     }
