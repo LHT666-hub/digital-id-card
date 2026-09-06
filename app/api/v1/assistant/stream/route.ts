@@ -45,12 +45,21 @@ async function delegateToResolvedPipeline(
   request: NextRequest,
   body: z.infer<typeof inputSchema>,
 ) {
+  const contextualQuestion = buildContextualQuestion(
+    body.question,
+    body.conversation,
+  ).slice(0, 3000);
   const forwarded = new NextRequest(
     request.url.replace(/\/stream(?:\?.*)?$/, "/messages"),
     {
       method: "POST",
       headers: request.headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        question: contextualQuestion,
+        residentId: body.residentId,
+        serviceRequest: body.serviceRequest,
+        sourceContext: body.sourceContext,
+      }),
     },
   );
   return resolvedAssistantPost(forwarded);
