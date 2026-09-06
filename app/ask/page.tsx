@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -15,20 +16,31 @@ import {
   History,
   ImagePlus,
   Keyboard,
+  LoaderCircle,
   Mic,
   Plus,
   Send,
   ShieldCheck,
   Stethoscope,
   Trash2,
+  XCircle,
 } from "lucide-react";
 import { PhoneShell } from "@/components/PhoneShell";
 import { CareSubjectSwitcher } from "@/components/CareSubjectSwitcher";
 import { HoldToTalkButton } from "@/components/HoldToTalkButton";
 import {
   DocumentImagePanel,
+  type DocumentImageAttachment,
   type DocumentImagePanelHandle,
 } from "@/components/DocumentImagePanel";
+import { buildContextualQuestion } from "@/lib/assistant/conversationContext";
+import {
+  createConversation,
+  getActiveConversationId,
+  getConversation,
+  saveConversation,
+  setActiveConversationId,
+} from "@/lib/assistant/clientConversation";
 
 type Message = {
   id: string;
@@ -38,6 +50,11 @@ type Message = {
   nextStep?: string;
   risk?: string;
   suggestDoctor?: boolean;
+  attachment?: {
+    type: "image";
+    label: string;
+    thumbnail?: string;
+  };
   actions?: Array<{
     id: string;
     kind: "service" | "schedule" | "public_info" | "progress" | "emergency";
@@ -104,6 +121,11 @@ const sourceLabels: Record<string, string> = {
   fallback: "安全兜底",
 };
 const DEMO_HISTORY_KEY = "jiayi-claw-demo-conversation-history";
+const WELCOME_MESSAGE: Message = {
+  id: "welcome",
+  role: "assistant",
+  text: "您好，直接告诉我您想办什么。我可以查已核验信息、整理预约或转诊诉求，并把下一步准备好给您确认。",
+};
 
 function retainDemoConversation(question: string, reply: { answer?: string; category?: string; riskLevel?: string }) {
   if (process.env.NEXT_PUBLIC_DEMO_MODE !== "true") return;
@@ -128,20 +150,36 @@ function retainDemoConversation(question: string, reply: { answer?: string; cate
   }
 }
 
+function buildImageQuestionContext(attachment: DocumentImageAttachment) {
+  const analysis = attachment.analysis;
+  if (!analysis) return "";
+  return [
+    "本轮用户上传了一张医疗相关图片。以下内容来自视觉模型对原图的结构化识别，只作为本轮图片上下文，不是医生诊断：",
+    analysis.visibleText.length
+      ? `图片可见文字：${analysis.visibleText.slice(0, 12).join("；")}`
+      : "图片可见文字：未清晰识别到文字",
+    analysis.plainSummary.length
+      ? `图片整理摘要：${analysis.plainSummary.slice(0, 6).join("；")}`
+      : "",
+    analysis.uncertainItems.length
+      ? `需要人工核对：${analysis.uncertainItems.slice(0, 6).join("；")}`
+      : "",
+    "回答时请结合用户本轮对这张图片的具体提问；看不清或无法确认的信息要明确说无法确认。",
+  ].filter(Boolean).join("\n");
+}
+
 export default function AskPage() {
   const router = useRouter();
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      text: "您好，直接告诉我您想办什么。我可以查已核验信息、整理预约或转诊诉求，并把下一步准备好给您确认。",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+  const [conversationId, setConversationId] = useState("");
+  const [conversationHydrated, setConversationHydrated] = useState(false);
+  const conversationCreatedAtRef = useRef(new Date().toISOString());
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState("正在理解您的问题…");
   const [inputMode, setInputMode] = useState<"text" | "voice">("text");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [documentAttachment, setDocumentAttachment] = useState<DocumentImageAttachment | null>(null);
   const [activities, setActivities] = useState<AssistantActivity[]>([]);
   const [activityOpen, setActivityOpen] = useState(false);
   const [activityLoading, setActivityLoading] = useState(true);
@@ -153,12 +191,36 @@ export default function AskPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const requestedConversationId = params.get("conversation");
+    const stored = getConversation(requestedConversationId ?? getActiveConversationId());
+    const conversation = stored ?? createConversation(WELCOME_MESSAGE);
+    setConversationId(conversation.id);
+    setActiveConversationId(conversation.id);
+    conversationCreatedAtRef.current = conversation.createdAt;
+    setMessages(conversation.messages.length ? conversation.messages as Message[] : [WELCOME_MESSAGE]);
+    setConversationHydrated(true);
+
     const initial = params.get("q");
     if (initial) setQuestion(initial);
     if (params.get("voice") === "1") setInputMode("voice");
     if (params.get("photo") === "1")
       window.setTimeout(() => documentRef.current?.openCamera(), 180);
   }, []);
+
+  useEffect(() => {
+    if (!conversationHydrated || !conversationId) return;
+    const timer = window.setTimeout(() => {
+      saveConversation({
+        id: conversationId,
+        title: "新对话",
+        createdAt: conversationCreatedAtRef.current,
+        updatedAt: new Date().toISOString(),
+        messages,
+      });
+      setActiveConversationId(conversationId);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [conversationHydrated, conversationId, messages]);
 
   useEffect(() => () => loadingTimersRef.current.forEach((timer) => window.clearTimeout(timer)), []);
 
@@ -225,12 +287,39 @@ export default function AskPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const attachmentForTurn = documentAttachment;
     const text = question.trim();
-    if (!text || loading) return;
+    if (loading || attachmentForTurn?.loading) return;
+    if (attachmentForTurn?.error) return;
+    if (!text && !attachmentForTurn?.analysis) return;
+
+    const displayText = text || "请帮我看看这张图片";
+    const conversation = messages
+      .filter((item) => item.id !== "welcome" && item.text.trim())
+      .slice(-10)
+      .map((item) => ({ role: item.role, content: item.text }));
+    const contextualQuestion = buildContextualQuestion(displayText, conversation);
+    const imageContext = attachmentForTurn ? buildImageQuestionContext(attachmentForTurn) : "";
+    const requestQuestion = imageContext
+      ? `${contextualQuestion}\n\n${imageContext}`.slice(0, 6000)
+      : contextualQuestion;
+
     setQuestion("");
+    documentRef.current?.clear();
     setMessages((items) => [
       ...items,
-      { id: crypto.randomUUID(), role: "user", text },
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        text: displayText,
+        attachment: attachmentForTurn
+          ? {
+              type: "image",
+              label: attachmentForTurn.name || "图片附件",
+              thumbnail: attachmentForTurn.thumbnail || undefined,
+            }
+          : undefined,
+      },
     ]);
     setLoading(true);
     setLoadingStage("正在理解您的问题…");
@@ -250,7 +339,7 @@ export default function AskPage() {
           "Content-Type": "application/json",
           Accept: "text/event-stream, application/json",
         },
-        body: JSON.stringify({ question: text }),
+        body: JSON.stringify({ question: requestQuestion, conversation }),
         signal: controller.signal,
       });
       const contentType = response.headers.get("content-type") ?? "";
@@ -281,7 +370,7 @@ export default function AskPage() {
           return;
         }
         if (!response.ok) throw new Error(payload.error?.message ?? "Claw 暂时无法回答");
-        appendResolvedReply(text, payload);
+        appendResolvedReply(displayText, payload);
         return;
       }
 
@@ -326,7 +415,7 @@ export default function AskPage() {
           const reply = payload.data?.reply;
           if (!reply) throw new Error("回答生成完成，但返回格式不完整。请重试。");
           sawFinal = true;
-          retainDemoConversation(text, reply);
+          retainDemoConversation(displayText, reply);
           setMessages((items) => items.map((item) =>
             item.id === assistantId
               ? {
@@ -412,6 +501,11 @@ export default function AskPage() {
     }).format(date);
   }
 
+  const canSend = !loading
+    && !documentAttachment?.loading
+    && !documentAttachment?.error
+    && Boolean(question.trim() || documentAttachment?.analysis);
+
   return (
     <PhoneShell contentMode="fixed">
       <div className="absolute inset-0 mx-auto flex min-h-0 w-full flex-col">
@@ -427,7 +521,7 @@ export default function AskPage() {
             <h1 className="page-title">问 Claw</h1>
           </div>
           <Link
-            href="/ask/history"
+            href={conversationId ? `/ask/history?conversation=${encodeURIComponent(conversationId)}` : "/ask/history"}
             aria-label="查看对话记录"
             className="ios-control ml-auto flex h-11 w-11 items-center justify-center rounded-full text-navy"
           >
@@ -522,7 +616,7 @@ export default function AskPage() {
           ) : (
             <div className="mt-4 flex items-center gap-2 px-1 text-[11px] leading-5 text-navy/42">
               <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-sage" />
-              对话记录仅本人可见；办理动作会形成独立服务轨迹
+              当前对话会在本次浏览会话中保留；办理动作会形成独立服务轨迹
             </div>
           )}
 
@@ -540,6 +634,25 @@ export default function AskPage() {
                 <div
                   className={`max-w-[86%] rounded-[24px] px-4 py-3 text-sm leading-6 shadow-[0_10px_26px_rgba(16,42,67,0.07)] ${item.role === "user" ? "rounded-br-[8px] bg-navy text-white" : "rounded-bl-[8px] border border-line/60 bg-surface-card text-navy"}`}
                 >
+                  {item.attachment ? (
+                    <div className="mb-2 overflow-hidden rounded-[16px] bg-white/10">
+                      {item.attachment.thumbnail ? (
+                        <Image
+                          src={item.attachment.thumbnail}
+                          width={220}
+                          height={160}
+                          unoptimized
+                          alt={item.attachment.label}
+                          className="max-h-40 w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-2 text-xs opacity-75">
+                          <ImagePlus className="h-4 w-4" />
+                          {item.attachment.label}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                   <p className="whitespace-pre-wrap">{item.text}</p>
                   {item.nextStep ? (
                     <p className="mt-2 border-t border-line/50 pt-2 text-xs opacity-70">
@@ -646,7 +759,7 @@ export default function AskPage() {
               ))}
             </div>
           ) : null}
-          <DocumentImagePanel ref={documentRef} onUse={setQuestion} />
+          <DocumentImagePanel ref={documentRef} onChange={setDocumentAttachment} />
         </div>
 
         {attachmentOpen ? (
@@ -709,64 +822,104 @@ export default function AskPage() {
 
         <form
           onSubmit={submit}
-          className="ask-composer mx-3 mt-2 flex shrink-0 gap-2 rounded-[28px] border border-white/70 bg-surface-nav/92 p-2 shadow-[0_14px_34px_rgba(16,42,67,0.13)] backdrop-blur-2xl"
+          className="ask-composer mx-3 mt-2 flex shrink-0 flex-col gap-2 rounded-[28px] border border-white/70 bg-surface-nav/92 p-2 shadow-[0_14px_34px_rgba(16,42,67,0.13)] backdrop-blur-2xl"
         >
-          <button
-            type="button"
-            onClick={() => setInputMode((mode) => mode === "text" ? "voice" : "text")}
-            aria-label={inputMode === "text" ? "切换到语音输入" : "切换到键盘输入"}
-            className="ios-pressable flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-health-muted text-sage"
-          >
-            {inputMode === "text" ? <Mic className="h-5 w-5" /> : <Keyboard className="h-5 w-5" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setAttachmentOpen((open) => !open)}
-            aria-label={attachmentOpen ? "关闭附件菜单" : "添加附件"}
-            aria-expanded={attachmentOpen}
-            className="ios-pressable flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#EDF3F7] text-[#315B7D]"
-          >
-            <Plus className={`h-5 w-5 transition-transform ${attachmentOpen ? "rotate-45" : ""}`} />
-          </button>
-          {inputMode === "voice" ? (
-            <HoldToTalkButton
-              disabled={loading}
-              onFallback={() =>
-                setMessages((items) => [
-                  ...items,
-                  {
-                    id: crypto.randomUUID(),
-                    role: "assistant",
-                    text: "当前浏览器没有开放语音识别能力。请先用键盘输入，或在微信小程序中按住说话。",
-                  },
-                ])
-              }
-              onTranscript={(transcript) => {
-                setQuestion((current) => current.trim() ? `${current.trim()} ${transcript}` : transcript);
-                setInputMode("text");
-              }}
-            />
-          ) : (
-            <>
-              <input
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                onFocus={() => window.requestAnimationFrame(() => {
-                  const container = messageScrollRef.current;
-                  if (container) container.scrollTop = container.scrollHeight;
-                })}
-                placeholder="问服务、排班、活动或准备材料"
-                className="h-12 min-w-0 flex-1 rounded-full border border-line bg-surface-card px-4 text-sm outline-none focus:border-sage"
-              />
+          {documentAttachment ? (
+            <div className="flex items-center gap-3 rounded-[20px] border border-line/60 bg-white/80 p-2 pr-2.5">
+              {documentAttachment.previewUrl ? (
+                <Image
+                  src={documentAttachment.thumbnail || documentAttachment.previewUrl}
+                  width={52}
+                  height={52}
+                  unoptimized
+                  alt="待发送图片"
+                  className="h-13 w-13 shrink-0 rounded-[14px] object-cover"
+                />
+              ) : (
+                <span className="flex h-13 w-13 shrink-0 items-center justify-center rounded-[14px] bg-health-muted text-sage">
+                  <ImagePlus className="h-5 w-5" />
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-navy">{documentAttachment.name || "图片附件"}</p>
+                <p className={`mt-0.5 text-[10px] ${documentAttachment.error ? "text-danger" : "text-navy/45"}`}>
+                  {documentAttachment.loading ? "正在识别图片，可继续打字或录音…" : documentAttachment.error ? documentAttachment.error : "图片已就绪，可继续补充问题后发送"}
+                </p>
+                {documentAttachment.consentRequired ? (
+                  <Link href="/privacy" className="mt-1 inline-block text-[10px] font-semibold text-sage underline underline-offset-2">
+                    管理图片识别授权
+                  </Link>
+                ) : null}
+              </div>
+              {documentAttachment.loading ? <LoaderCircle className="h-4 w-4 animate-spin text-sage" /> : null}
               <button
-                disabled={!question.trim() || loading}
-                aria-label="发送"
-                className="ios-pressable flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy text-white shadow-[0_10px_22px_rgba(16,42,67,0.2)] disabled:opacity-40"
+                type="button"
+                onClick={() => documentRef.current?.clear()}
+                aria-label="移除图片"
+                className="ios-pressable flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-input text-navy/45"
               >
-                <Send className="h-4 w-4" />
+                <XCircle className="h-4 w-4" />
               </button>
-            </>
-          )}
+            </div>
+          ) : null}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setInputMode((mode) => mode === "text" ? "voice" : "text")}
+              aria-label={inputMode === "text" ? "切换到语音输入" : "切换到键盘输入"}
+              className="ios-pressable flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-health-muted text-sage"
+            >
+              {inputMode === "text" ? <Mic className="h-5 w-5" /> : <Keyboard className="h-5 w-5" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAttachmentOpen((open) => !open)}
+              aria-label={attachmentOpen ? "关闭附件菜单" : "添加附件"}
+              aria-expanded={attachmentOpen}
+              className="ios-pressable flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#EDF3F7] text-[#315B7D]"
+            >
+              <Plus className={`h-5 w-5 transition-transform ${attachmentOpen ? "rotate-45" : ""}`} />
+            </button>
+            {inputMode === "voice" ? (
+              <HoldToTalkButton
+                disabled={loading}
+                onFallback={() =>
+                  setMessages((items) => [
+                    ...items,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant",
+                      text: "当前浏览器没有开放语音识别能力。请先用键盘输入，或在微信小程序中按住说话。",
+                    },
+                  ])
+                }
+                onTranscript={(transcript) => {
+                  setQuestion((current) => current.trim() ? `${current.trim()} ${transcript}` : transcript);
+                  setInputMode("text");
+                }}
+              />
+            ) : (
+              <>
+                <input
+                  value={question}
+                  onChange={(event) => setQuestion(event.target.value)}
+                  onFocus={() => window.requestAnimationFrame(() => {
+                    const container = messageScrollRef.current;
+                    if (container) container.scrollTop = container.scrollHeight;
+                  })}
+                  placeholder={documentAttachment ? "补充你想问这张图片的内容" : "问服务、排班、活动或准备材料"}
+                  className="h-12 min-w-0 flex-1 rounded-full border border-line bg-surface-card px-4 text-sm outline-none focus:border-sage"
+                />
+                <button
+                  disabled={!canSend}
+                  aria-label="发送"
+                  className="ios-pressable flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy text-white shadow-[0_10px_22px_rgba(16,42,67,0.2)] disabled:opacity-40"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </>
+            )}
+          </div>
         </form>
         <div className="shrink-0 pb-[max(12px,env(safe-area-inset-bottom))]" />
       </div>
