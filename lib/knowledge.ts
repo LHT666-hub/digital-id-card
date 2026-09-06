@@ -1,5 +1,6 @@
 import { knowledgeItems } from "@/data/knowledge";
 import { normalizeQuestion } from "@/lib/faq";
+import { shouldSearchInstitutionalKnowledge } from "@/lib/rag/search";
 import { KnowledgeItem } from "@/lib/types";
 
 const weakKnowledgeKeywords = new Set([
@@ -50,6 +51,8 @@ export function searchKnowledge(question: string): KnowledgeItem[] {
   if (process.env.NEXT_PUBLIC_DEMO_MODE !== "true") {
     return [];
   }
+
+  if (!shouldSearchInstitutionalKnowledge(question)) return [];
 
   const normalizedQuestion = normalizeQuestion(question);
 
