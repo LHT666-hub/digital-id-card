@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, MessageCircle, ShieldCheck, Trash2 } from "lucide-react";
+import { ChevronRight, MessageCircle, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { BackHeader } from "@/components/BackHeader";
 import { PhoneShell } from "@/components/PhoneShell";
 import { SectionCard } from "@/components/SectionCard";
@@ -81,6 +81,16 @@ export default function AskHistoryPage() {
     <PhoneShell>
       <main className="space-y-5 px-4 pb-8">
         <BackHeader title="对话记录" subtitle="同一段对话可连续多轮，返回后仍可继续" />
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs leading-5 text-navy/45">一段对话会保留自己的上下文；需要换话题时可以新建一段。</p>
+          <Link
+            href="/ask?conversation=new"
+            className="ios-pressable flex shrink-0 items-center gap-1.5 rounded-full bg-navy px-3.5 py-2.5 text-xs font-semibold text-white"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新对话
+          </Link>
+        </div>
         <div className="flex items-center justify-between rounded-[22px] bg-health-soft px-4 py-3 text-xs text-navy/60">
           <span className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-sage" />
@@ -132,7 +142,7 @@ export default function AskHistoryPage() {
             <SectionCard>
               <p className="text-sm font-semibold text-navy">还没有本次会话记录</p>
               <p className="mt-2 text-xs leading-5 text-navy/55">开始聊天后，当前对话会在本浏览会话内保留；离开问答页再返回不会清空。</p>
-              <Link href="/ask" className="mt-4 inline-flex rounded-full bg-navy px-5 py-2.5 text-sm font-semibold text-white">去问 Claw</Link>
+              <Link href="/ask?conversation=new" className="mt-4 inline-flex rounded-full bg-navy px-5 py-2.5 text-sm font-semibold text-white">去问 Claw</Link>
             </SectionCard>
           )
         ) : items.length ? (
@@ -154,7 +164,7 @@ export default function AskHistoryPage() {
             <div className="py-5 text-center">
               <MessageCircle className="mx-auto h-7 w-7 text-sage" />
               <p className="mt-3 text-sm font-semibold text-navy">还没有对话记录</p>
-              <Link href="/ask" className="mt-4 inline-flex rounded-full bg-navy px-5 py-2.5 text-sm font-semibold text-white">去问 Claw</Link>
+              <Link href="/ask?conversation=new" className="mt-4 inline-flex rounded-full bg-navy px-5 py-2.5 text-sm font-semibold text-white">去问 Claw</Link>
             </div>
           </SectionCard>
         )}
