@@ -159,7 +159,7 @@ export function routeSkillIds(question: string) {
   const result = new Set<string>();
   if (isSafetyTriageQuestion(question)) result.add("safety-triage");
   if (
-    /(几点|什么时候|地址|电话|在哪里|怎么查|流程|政策|门诊时间|服务时间|家庭医生签约|签约服务|长处方|社区卫生服务中心|海湾镇|南桥镇|奉贤区|接种|疫苗|义诊|健康讲座|社区活动)/.test(question)
+    /(几点|什么时候|地址|电话|在哪里|怎么查|流程|门诊时间|服务时间|家庭医生签约|签约服务|长处方|社区卫生服务中心|海湾镇|南桥镇|奉贤区|接种|疫苗|义诊|健康讲座|社区活动)/.test(question)
   ) {
     result.add("public-info-qa");
   }

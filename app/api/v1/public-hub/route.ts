@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   const traceId = createTraceId();
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const serviceReachable = await isPublicDataServiceReachable();
-  const publicInfo = serviceReachable ? await searchPublicInfo(query) : [];
+  const publicInfo = serviceReachable ? await searchPublicInfo(query, { force: true }) : [];
   const supabase = serviceReachable ? createSupabasePublicServerClient() : null;
   let content: Awaited<ReturnType<typeof getPublishedContent>> = [];
 

@@ -12,21 +12,40 @@ type SearchRow = {
 };
 
 const institutionalKnowledgePattern =
-  /(?:家庭医生|家医|社区卫生服务中心|社区卫生|社卫|签约|门诊|排班|坐班|预约|挂号|转诊|复诊|随访|续方|配药|开药|长处方|体检|报告|检查单|化验单|健康云|政策|流程|办理|材料|地址|电话|几点|什么时候|今天|明天|本周|本月|活动|讲座|服务时间|营业时间|预防针|疫苗|接种|五四|海旅|海湾|南桥|奉贤)/;
+  /(?:家庭医生|家医|社区卫生服务中心|社区卫生|社卫|签约|门诊|排班|坐班|预约|挂号|转诊|复诊|随访|续方|配药|开药|长处方|体检|报告|检查单|化验单|健康云|流程|办理|材料|地址|电话|几点|什么时候|今天|明天|本周|本月|活动|讲座|服务时间|营业时间|预防针|疫苗|接种|五四|海旅|海湾|南桥|奉贤)/;
 
 const p0Disease = /(?:高血压|2型糖尿病|二型糖尿病|糖尿病|慢性阻塞性肺疾病|慢阻肺|COPD)/i;
 const managementCue = /(?:标准|规范|指南|随访|复诊|转诊|社区管理|基层管理|健康管理|筛查|体检|肺功能|血压测量|危急|急性加重|服务|多久|几次|一年几次|家庭医生)/i;
 
 /**
  * RAG is a verified-source tool, not a mandatory gate in front of every chat.
- * General health education and everyday questions should go straight to the
- * base model; institution-specific/current service questions and P0 disease
- * management questions use reviewed knowledge first.
+ * General health education and public time-sensitive policy questions should
+ * stay on the web-capable base model; institution-specific/current service
+ * questions and P0 disease management questions use reviewed knowledge first.
  */
 export function shouldSearchInstitutionalKnowledge(question: string) {
   const normalized = question.trim();
   if (institutionalKnowledgePattern.test(normalized)) return true;
   return p0Disease.test(normalized) && managementCue.test(normalized);
+}
+
+export function filterConfidentKnowledgeHits(hits: KnowledgeSearchHit[]) {
+  if (!hits.length) return [];
+
+  const rerankMin = Number(process.env.RAG_RERANK_MIN_SCORE ?? 0.35);
+  const lexicalMin = Number(process.env.RAG_LEXICAL_MIN_SCORE ?? 0.12);
+  const vectorMin = Number(process.env.RAG_VECTOR_MIN_SCORE ?? 0.5);
+  const top = hits[0];
+  const topIsConfident = top.rerankScore !== undefined
+    ? top.rerankScore >= rerankMin
+    : top.textScore >= lexicalMin || top.vectorScore >= vectorMin;
+
+  if (!topIsConfident) return [];
+
+  return hits.filter((hit) => hit.rerankScore !== undefined
+    ? hit.rerankScore >= Math.max(0.2, rerankMin * 0.6)
+    : hit.textScore >= Math.max(0.08, lexicalMin * 0.65)
+      || hit.vectorScore >= Math.max(0.42, vectorMin * 0.84));
 }
 
 export async function searchKnowledge(input: {
@@ -82,7 +101,7 @@ export async function searchKnowledge(input: {
     vectorScore: Number(row.vector_score ?? 0), combinedScore: Number(row.combined_score ?? 0),
   }));
 
-  return rerankKnowledgeHits(query, hits, finalLimit);
+  return filterConfidentKnowledgeHits(await rerankKnowledgeHits(query, hits, finalLimit));
 }
 
 export function buildKnowledgeCitations(hits: KnowledgeSearchHit[]) {

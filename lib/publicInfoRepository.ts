@@ -1,5 +1,6 @@
 import { publicInfoItems } from "@/data/publicInfo";
 import { getRetrievalTerms, normalizeRetrievalQuery } from "@/lib/rag/query";
+import { shouldSearchInstitutionalKnowledge } from "@/lib/rag/search";
 import { createSupabasePublicServerClient } from "@/lib/supabase/server";
 import type { AskReply } from "@/lib/types";
 
@@ -229,7 +230,9 @@ export function rankPublicInfoRecords(records: PublicInfoRecord[], query: string
     .map(({ item }) => item);
 }
 
-export async function searchPublicInfo(query: string) {
+export async function searchPublicInfo(query: string, options: { force?: boolean } = {}) {
+  if (query && !options.force && !shouldSearchInstitutionalKnowledge(query)) return [];
+
   const curatedRecords = localRecords();
   const supabase = createSupabasePublicServerClient();
   if (supabase) {

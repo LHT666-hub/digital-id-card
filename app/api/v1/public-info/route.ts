@@ -29,7 +29,7 @@ function schedulePendingKnowledgeIndex(traceId: string) {
 export async function GET(request: NextRequest) {
   const traceId = createTraceId();
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
-  const items = await searchPublicInfo(query);
+  const items = await searchPublicInfo(query, { force: true });
   if (query) schedulePendingKnowledgeIndex(traceId);
   return apiOk({ items, query, verifiedCount: items.filter((item) => !item.stale).length }, traceId);
 }

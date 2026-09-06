@@ -32,6 +32,7 @@
     "test:e2e": "playwright test",
     "audit:mobile": "node scripts/audit-mobile-layout.mjs",
     "eval:ask": "node scripts/ask-eval.mjs",
+    "eval:rag:live": "node --env-file-if-exists=.env.production.local scripts/run-rag-live-eval.mjs",
     "sync:official-knowledge": "node --env-file-if-exists=.env.production.local scripts/sync-official-knowledge.mjs",
     "sync:official-knowledge:dry": "node scripts/sync-official-knowledge.mjs --dry-run",
     "import:medical-ontology": "node --env-file-if-exists=.env.production.local scripts/import-medical-entity-ontology.mjs",

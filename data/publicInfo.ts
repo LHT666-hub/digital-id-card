@@ -8,6 +8,14 @@ export type CuratedPublicInfoItem = PublicInfoItem & {
   expiresAt?: string | null;
 };
 
+function residentFacing(value: string) {
+  return value
+    .split(/(?<=[。！？])/)
+    .filter((sentence) => !/(?:Claw可用|后续知识库|知识库应|分块索引)/i.test(sentence))
+    .join("")
+    .trim();
+}
+
 /**
  * Curated public-service and official medical knowledge used as the safe local
  * fallback and as the canonical seed source for Supabase/RAG. `updatedAt`
@@ -21,9 +29,9 @@ export const publicInfoItems: CuratedPublicInfoItem[] = curatedKnowledge.map((it
   title: item.title,
   category: item.category,
   keywords: item.keywords,
-  summary: item.summary,
-  details: item.details,
-  nextStep: item.nextStep,
+  summary: residentFacing(item.summary),
+  details: residentFacing(item.details),
+  nextStep: residentFacing(item.nextStep),
   sourceName: item.sourceName,
   sourceUrl: item.sourceUrl,
   updatedAt: item.verifiedAt,

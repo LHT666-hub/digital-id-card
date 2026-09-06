@@ -34,11 +34,21 @@ function asTimestamp(value) {
   return date.toISOString();
 }
 
+function residentFacing(value) {
+  if (!value) return "";
+  return String(value)
+    .split(/(?<=[。！？])/)
+    .filter((sentence) => !/(?:Claw可用|后续知识库|知识库应|分块索引)/i.test(sentence))
+    .join("")
+    .trim();
+}
+
 function buildContent(item) {
+  const nextStep = residentFacing(item.nextStep);
   return [
-    item.summary,
-    item.details,
-    `居民下一步：${item.nextStep}`,
+    residentFacing(item.summary),
+    residentFacing(item.details),
+    nextStep ? `居民下一步：${nextStep}` : "",
     `来源发布日期：${item.sourcePublishedAt}`,
     `知识核验日期：${item.verifiedAt}`,
   ].filter(Boolean).join("\n\n");
