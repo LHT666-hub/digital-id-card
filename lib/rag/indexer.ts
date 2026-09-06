@@ -3,6 +3,8 @@ import { chunkChineseDocument } from "@/lib/rag/chunker";
 import { getEmbeddingProvider, vectorToSql } from "@/lib/rag/embeddings";
 import type { KnowledgeSourceType, KnowledgeVisibility, RagSupabaseClient } from "@/lib/rag/types";
 
+const RAG_INDEXING_PROFILE = "rag-v2-title-category-alias-embedding-v1";
+
 type ReviewedSource = {
   sourceType: KnowledgeSourceType;
   sourceId: string;
@@ -14,6 +16,7 @@ type ReviewedSource = {
   sourceName: string;
   sourceUrl: string;
   content: string;
+  retrievalAliases: string[];
   visibility: KnowledgeVisibility;
   effectiveFrom: string | null;
   expiresAt: string | null;
@@ -24,6 +27,27 @@ type ReviewedSource = {
 
 function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function uniqueAliases(values: unknown[]) {
+  return [...new Set(values
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean))];
+}
+
+function indexingHash(contentHash: string, aliases: string[]) {
+  return digest(`${RAG_INDEXING_PROFILE}\n${contentHash}\n${aliases.join("\n")}`);
+}
+
+function embeddingText(source: ReviewedSource, chunk: { heading: string | null; content: string }) {
+  return [
+    `标题：${source.title}`,
+    `类别：${source.category}`,
+    source.retrievalAliases.length ? `检索别名：${source.retrievalAliases.join("；")}` : "",
+    chunk.heading ? `章节：${chunk.heading}` : "",
+    chunk.content,
+  ].filter(Boolean).join("\n");
 }
 
 async function loadReviewedSource(
@@ -38,29 +62,33 @@ async function loadReviewedSource(
       .eq("id", sourceId).eq("status", "published").maybeSingle();
     if (error) throw error;
     if (!data || !data.reviewed_at || (data.expires_at && data.expires_at <= now)) throw new Error("RAG_SOURCE_NOT_ACTIVE");
+    const aliases = uniqueAliases([data.category]);
     return {
       sourceType, sourceId: data.id, organizationId: data.organization_id,
       communityId: data.community_id, institutionId: data.institution_id,
       title: data.title, category: data.category, sourceName: data.source_name,
       sourceUrl: data.original_url, content: `${data.title}\n\n${data.summary}`,
+      retrievalAliases: aliases,
       visibility: "public", effectiveFrom: data.effective_from, expiresAt: data.expires_at,
-      reviewedAt: data.reviewed_at, reviewedBy: data.reviewed_by, contentHash: data.content_hash,
+      reviewedAt: data.reviewed_at, reviewedBy: data.reviewed_by,
+      contentHash: indexingHash(data.content_hash, aliases),
     };
   }
   if (sourceType === "public_info") {
     const { data, error } = await supabase.from("public_info_entries")
-      .select("id,organization_id,community_id,title,category,content,source_name,source_url,effective_from,expires_at,verified_at,verified_by,status")
+      .select("id,organization_id,community_id,title,category,content,keywords,source_name,source_url,effective_from,expires_at,verified_at,verified_by,status")
       .eq("id", sourceId).eq("status", "published").maybeSingle();
     if (error) throw error;
     if (!data || (data.expires_at && data.expires_at <= now)) throw new Error("RAG_SOURCE_NOT_ACTIVE");
     const content = `${data.title}\n\n${data.content}`;
+    const aliases = uniqueAliases([data.category, ...((data.keywords as string[] | null) ?? [])]);
     return {
       sourceType, sourceId: data.id, organizationId: data.organization_id,
       communityId: data.community_id, institutionId: null, title: data.title,
       category: data.category, sourceName: data.source_name, sourceUrl: data.source_url,
-      content, visibility: "public", effectiveFrom: data.effective_from,
+      content, retrievalAliases: aliases, visibility: "public", effectiveFrom: data.effective_from,
       expiresAt: data.expires_at, reviewedAt: data.verified_at,
-      reviewedBy: data.verified_by, contentHash: digest(content),
+      reviewedBy: data.verified_by, contentHash: indexingHash(digest(content), aliases),
     };
   }
   throw new Error("RAG_MANUAL_SOURCE_NOT_IMPLEMENTED");
@@ -139,8 +167,8 @@ export async function indexKnowledgeSource(input: {
     let currentEmbeddingMatches = true;
     if (existingDocument?.current_version) {
       const { data: currentVersion, error: currentVersionError } = await supabase.from("knowledge_document_versions")
-        .select("embedding_model,embedding_dimensions,status")
-        .eq("document_id", existingDocument.id).eq("version", existingDocument.current_version).maybeSingle();
+        .select("embedding_model,embedding_dimensions,status").eq("document_id", existingDocument.id)
+        .eq("version", existingDocument.current_version).maybeSingle();
       if (currentVersionError) throw currentVersionError;
       currentEmbeddingMatches = currentVersion?.status === "indexed"
         && (provider
@@ -162,7 +190,10 @@ export async function indexKnowledgeSource(input: {
       visibility: source.visibility, status: "indexing", effective_from: source.effectiveFrom,
       expires_at: source.expiresAt, reviewed_at: source.reviewedAt,
       reviewed_by: source.reviewedBy, content_hash: source.contentHash,
-      last_error: null, metadata: { traceId, indexedBy: actorId ?? "system" },
+      last_error: null, metadata: {
+        traceId, indexedBy: actorId ?? "system", indexingProfile: RAG_INDEXING_PROFILE,
+        retrievalAliases: source.retrievalAliases,
+      },
     };
     if (existingDocument) {
       documentId = existingDocument.id;
@@ -187,14 +218,19 @@ export async function indexKnowledgeSource(input: {
     }
 
     const { data: version, error: versionError } = await supabase.from("knowledge_document_versions")
-      .upsert({ document_id: documentId, version: nextVersion, content: source.content,
+      .upsert({
+        document_id: documentId, version: nextVersion, content: source.content,
         content_hash: source.contentHash, status: "pending", embedding_model: provider?.model ?? null,
-        embedding_dimensions: provider?.dimensions ?? null }, { onConflict: "document_id,content_hash" })
+        embedding_dimensions: provider?.dimensions ?? null,
+        chunking_strategy: "zh-structural-v2-alias-embedding",
+      }, { onConflict: "document_id,content_hash" })
       .select("id,version").single();
     if (versionError) throw versionError;
     versionId = version.id;
 
-    const vectors = provider ? await provider.embedMany(chunks.map((chunk) => `${source.title}\n${chunk.heading ?? ""}\n${chunk.content}`)) : null;
+    const vectors = provider
+      ? await provider.embedMany(chunks.map((chunk) => embeddingText(source, chunk)))
+      : null;
     await supabase.from("knowledge_chunks").delete().eq("version_id", versionId);
     const { error: chunkError } = await supabase.from("knowledge_chunks").insert(chunks.map((chunk, index) => ({
       document_id: documentId, version_id: versionId, organization_id: source.organizationId,
@@ -203,7 +239,10 @@ export async function indexKnowledgeSource(input: {
       char_count: chunk.charCount, content_hash: chunk.contentHash,
       embedding: vectors ? vectorToSql(vectors[index]) : null,
       embedding_model: provider?.model ?? null,
-      metadata: { sourceType, sourceId, reviewedAt: source.reviewedAt },
+      metadata: {
+        sourceType, sourceId, reviewedAt: source.reviewedAt,
+        indexingProfile: RAG_INDEXING_PROFILE, retrievalAliases: source.retrievalAliases,
+      },
     })));
     if (chunkError) throw chunkError;
 
@@ -221,16 +260,22 @@ export async function indexKnowledgeSource(input: {
         visibility: source.visibility, effective_from: source.effectiveFrom,
         expires_at: source.expiresAt, reviewed_at: source.reviewedAt,
         reviewed_by: source.reviewedBy, content_hash: source.contentHash,
-        metadata: { traceId, indexedBy: actorId ?? "system" }, status: "active",
-        current_version: version.version, last_indexed_at: indexedAt, last_error: null,
-      })
-      .eq("id", documentId);
+        metadata: {
+          traceId, indexedBy: actorId ?? "system", indexingProfile: RAG_INDEXING_PROFILE,
+          retrievalAliases: source.retrievalAliases,
+        }, status: "active", current_version: version.version,
+        last_indexed_at: indexedAt, last_error: null,
+      }).eq("id", documentId);
     if (publishDocumentError) throw publishDocumentError;
     await markJob(supabase, jobId, "completed");
-    return { documentId, version: version.version, unchanged: false, chunkCount: chunks.length, embeddingModel: provider?.model ?? null };
+    return {
+      documentId, version: version.version, unchanged: false, chunkCount: chunks.length,
+      embeddingModel: provider?.model ?? null, indexingProfile: RAG_INDEXING_PROFILE,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 300) : "RAG_INDEX_FAILED";
-    if (versionId) await supabase.from("knowledge_document_versions").update({ status: "failed", last_error: message }).eq("id", versionId);
+    if (versionId) await supabase.from("knowledge_document_versions")
+      .update({ status: "failed", last_error: message }).eq("id", versionId);
     if (documentId) {
       await supabase.from("knowledge_documents").update({ last_error: message }).eq("id", documentId);
       await supabase.from("knowledge_documents").update({ status: "failed" }).eq("id", documentId).eq("current_version", 0);
