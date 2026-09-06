@@ -16,13 +16,15 @@ export function trimConversationTurns(
     }));
 }
 
-const followUpPattern = /^(?:那|那么|这个|这个呢|它|这个情况|这种情况|还有|然后|继续|刚才|上面|前面|那边|这里|这样|为什么|怎么|呢|周[一二三四五六日天]|几点|多久|可以吗|行吗)/;
+const followUpPattern = /^(?:那|那么|这个|这个呢|它|这个情况|这种情况|还有|然后|继续|刚才|你刚才|刚刚你|你前面|上面|前面|那边|这里|这样|为什么|怎么|呢|周[一二三四五六日天]|几点|多久|可以吗|行吗)/;
 
 export function buildContextualQuestion(
   question: string,
   turns: AssistantConversationTurn[] | undefined,
 ) {
   const current = question.trim();
+  if (current.includes("\n追问：")) return current;
+
   const recent = trimConversationTurns(turns, 8);
   if (!recent.length) return current;
 
