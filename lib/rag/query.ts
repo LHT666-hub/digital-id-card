@@ -9,6 +9,7 @@ const expansionRules: Array<{ pattern: RegExp; terms: string[] }> = [
   { pattern: /(?:几点|啥辰光|什么时候|哪几天|哪天|开门|营业)/, terms: ["服务时间", "门诊时间"] },
   { pattern: /(?:电话|联系方式|号码)/, terms: ["联系电话", "联系方式"] },
   { pattern: /(?:地址|在哪里|在哪儿|去哪|怎么走)/, terms: ["地址", "服务点", "位置"] },
+  { pattern: /(?:分中心|服务点|服务站|网点|几个点|几个分中心)/, terms: ["分中心", "服务点", "服务站", "服务网络"] },
   { pattern: /(?:义诊|讲座|健康活动|活动)/, terms: ["健康活动", "义诊", "讲座"] },
   { pattern: /(?:高血压)/, terms: ["高血压", "血压管理"] },
   { pattern: /(?:糖尿病|血糖)/, terms: ["糖尿病", "血糖管理"] },
@@ -16,8 +17,8 @@ const expansionRules: Array<{ pattern: RegExp; terms: string[] }> = [
 ];
 
 const localityRules: Array<{ pattern: RegExp; terms: string[] }> = [
-  { pattern: /(?:海湾镇|海湾社区|海湾社卫|海湾卫生)/, terms: ["海湾镇", "海湾镇社区卫生服务中心"] },
-  { pattern: /(?:南桥镇|南桥社区|南桥社卫|南桥卫生)/, terms: ["南桥镇", "南桥镇社区卫生服务中心"] },
+  { pattern: /(?:海湾镇|海湾社区|海湾社卫|海湾卫生|海湾)/, terms: ["海湾镇", "海湾镇社区卫生服务中心"] },
+  { pattern: /(?:南桥镇|南桥社区|南桥社卫|南桥卫生|南桥)/, terms: ["南桥镇", "南桥镇社区卫生服务中心"] },
   { pattern: /(?:奉贤|奉贤区)/, terms: ["奉贤区", "奉贤区卫生健康委员会"] },
   { pattern: /(?:五四|五四农场)/, terms: ["五四", "五四分中心", "海湾镇"] },
   { pattern: /(?:海旅|海旅分中心)/, terms: ["海旅分中心", "海湾镇"] },
