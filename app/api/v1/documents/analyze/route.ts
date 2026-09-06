@@ -16,6 +16,46 @@ export async function POST(request: NextRequest) {
   const traceId = createTraceId();
   const startedAt = Date.now();
   const auth = await getApiAuthContext(request);
+
+  // 演示环境：不接触真实视觉模型与数据库，返回明确标注的示例识别结果，
+  // 让“上传图片 → 查看识别 → 确认带入对话”的完整流程在本地演示中可走通。
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true" && !auth.supabase) {
+    const demoForm = await request.formData().catch(() => null);
+    const demoImage = demoForm?.get("image");
+    if (!(demoImage instanceof File) || demoImage.size === 0)
+      return apiError("IMAGE_REQUIRED", "请先拍摄或选择一张图片。", 400, traceId);
+    if (demoImage.size > maxImageBytes)
+      return apiError("IMAGE_TOO_LARGE", "单张图片不能超过 4MB。", 413, traceId);
+    const demoBytes = Buffer.from(await demoImage.arrayBuffer());
+    if (!detectImageMediaType(demoBytes))
+      return apiError("IMAGE_TYPE_UNSUPPORTED", "目前支持 JPG、PNG 和 WebP 图片。", 415, traceId);
+    return apiOk(
+      {
+        documentType: "other",
+        visibleText: [
+          "【演示环境】当前为示例识别结果，未对真实图片进行识别。",
+          "正式环境将由经审核的视觉模型提取图片中清晰可见的文字。",
+        ],
+        plainSummary: [
+          "演示模式不调用真实视觉模型，这里仅展示识别结果的呈现方式。",
+          "正式环境会用通俗语言复述图片中明确写出的内容，不提供诊断或处方建议。",
+        ],
+        questionsForClinician: [
+          "这份文件里哪些内容需要我重点关注？",
+          "下一步需要我提前准备或核对什么？",
+        ],
+        uncertainItems: ["以上为演示示例，不代表您所上传图片的真实内容。"],
+        confidence: "low",
+        safetyNotice:
+          "识别结果可能有误，请以原始文件和医生核对为准。Claw 不提供诊断、处方或用药调整建议。",
+        retained: false,
+        processing: "temporary_memory_only",
+        demo: true,
+      },
+      traceId,
+    );
+  }
+
   if (!auth.supabase || !auth.profile)
     return apiError("UNAUTHENTICATED", "请先登录。", 401, traceId);
 
