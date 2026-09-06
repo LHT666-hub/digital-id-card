@@ -5,7 +5,10 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourcePath = path.join(root, "data", "official-public-info.json");
+const sourcePaths = [
+  path.join(root, "data", "official-public-info.json"),
+  path.join(root, "data", "official-medical-guidelines.json"),
+];
 const dryRun = process.argv.includes("--dry-run");
 
 function required(name, ...fallbacks) {
@@ -66,8 +69,22 @@ async function processRagQueue() {
   }
 }
 
-const items = JSON.parse(await readFile(sourcePath, "utf8"));
-if (!Array.isArray(items) || items.length === 0) throw new Error("Official knowledge pack is empty.");
+const packs = await Promise.all(sourcePaths.map(async (sourcePath) => {
+  const parsed = JSON.parse(await readFile(sourcePath, "utf8"));
+  if (!Array.isArray(parsed)) throw new Error(`Official knowledge pack is not an array: ${sourcePath}`);
+  return parsed;
+}));
+const items = packs.flat();
+if (items.length === 0) throw new Error("Official knowledge packs are empty.");
+
+const ids = new Set();
+for (const item of items) {
+  if (!item?.id || !item?.title || !item?.sourceUrl || !item?.verifiedAt) {
+    throw new Error(`Invalid official knowledge item: ${JSON.stringify(item).slice(0, 200)}`);
+  }
+  if (ids.has(item.id)) throw new Error(`Duplicate official knowledge id: ${item.id}`);
+  ids.add(item.id);
+}
 
 const rows = items.map((item) => ({
   id: stableUuid(item.id),
@@ -107,9 +124,6 @@ if (organizationError || !organization) {
 const scopedRows = rows.map((row) => ({
   ...row,
   organization_id: organization.id,
-  // Keep curated policy/service knowledge tenant-wide. Location names and
-  // keywords handle Haiwan/Nanqiao retrieval; live patient/service data remain
-  // community-scoped in their structured tables.
   community_id: null,
   verified_by: null,
 }));
