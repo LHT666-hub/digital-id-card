@@ -1,0 +1,53 @@
+name: RAG quality gate
+
+on:
+  pull_request:
+    paths:
+      - "data/official-public-info.json"
+      - "data/official-medical-guidelines.json"
+      - "data/rag-eval-cases.json"
+      - "lib/publicInfoRepository.ts"
+      - "lib/publicInfoRepository.test.ts"
+      - "lib/rag/**"
+      - "supabase/migrations/**rag**"
+      - ".github/workflows/rag-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - "data/official-public-info.json"
+      - "data/official-medical-guidelines.json"
+      - "data/rag-eval-cases.json"
+      - "lib/publicInfoRepository.ts"
+      - "lib/publicInfoRepository.test.ts"
+      - "lib/rag/**"
+      - "supabase/migrations/**rag**"
+      - ".github/workflows/rag-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  retrieval-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run RAG retrieval regression tests
+        run: >-
+          npx vitest run
+          lib/rag/query.test.ts
+          lib/publicInfoRepository.test.ts
+          lib/rag/searchRouting.test.ts
+          lib/rag/retrievalEval.test.ts
+          lib/rag/medicalKnowledge.test.ts

@@ -26,7 +26,8 @@ describe("golden public knowledge retrieval set", () => {
     let recallAt5 = 0;
     let reciprocalRank = 0;
 
-    const failures: Array<{ id: string; query: string; topIds: string[] }> = [];
+    const recallFailures: Array<{ id: string; query: string; topIds: string[] }> = [];
+    const top1Misses: Array<{ id: string; query: string; expectedIds: string[]; topIds: string[] }> = [];
 
     for (const testCase of evalCases) {
       const ranked = rankPublicInfoRecords(corpus, testCase.query);
@@ -35,9 +36,10 @@ describe("golden public knowledge retrieval set", () => {
       const rank = ranked.findIndex((item) => expected.has(item.id));
 
       if (rank === 0) hitAt1 += 1;
+      else top1Misses.push({ id: testCase.id, query: testCase.query, expectedIds: testCase.expectedIds, topIds });
       if (rank >= 0 && rank < 5) recallAt5 += 1;
       if (rank >= 0) reciprocalRank += 1 / (rank + 1);
-      if (rank < 0 || rank >= 5) failures.push({ id: testCase.id, query: testCase.query, topIds });
+      if (rank < 0 || rank >= 5) recallFailures.push({ id: testCase.id, query: testCase.query, topIds });
     }
 
     const total = evalCases.length;
@@ -47,9 +49,12 @@ describe("golden public knowledge retrieval set", () => {
       mrr: reciprocalRank / total,
     };
 
-    expect(failures, `Recall@5 failures: ${JSON.stringify(failures, null, 2)}`).toHaveLength(0);
+    expect(recallFailures, `Recall@5 failures: ${JSON.stringify(recallFailures, null, 2)}`).toHaveLength(0);
     expect(metrics.recallAt5).toBeGreaterThanOrEqual(0.95);
-    expect(metrics.hitAt1).toBeGreaterThanOrEqual(0.8);
+    expect(
+      metrics.hitAt1,
+      `Hit@1 misses (${top1Misses.length}/${total}): ${JSON.stringify(top1Misses, null, 2)}`,
+    ).toBeGreaterThanOrEqual(0.8);
     expect(metrics.mrr).toBeGreaterThanOrEqual(0.85);
   });
 });

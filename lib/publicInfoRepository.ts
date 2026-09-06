@@ -50,6 +50,77 @@ function localityAdjustment(item: PublicInfoRecord, query: string) {
   return 0;
 }
 
+function intentAdjustment(item: PublicInfoRecord, query: string) {
+  const normalizedQuery = normalizeRetrievalQuery(query);
+  const primaryText = normalizeRetrievalQuery(
+    `${item.title} ${item.category} ${item.keywords.join(" ")}`,
+  );
+  const fullText = `${primaryText} ${normalizeRetrievalQuery(item.content)}`;
+  let value = 0;
+
+  // Exact service intent should outrank a generic item from the same locality.
+  // Primary fields receive the strongest boost; a concept mentioned only in the
+  // body is useful for recall but should not win the top result by itself.
+  if (/(?:预防针|疫苗|接种)/.test(normalizedQuery)) {
+    value += /(?:预防接种|接种|疫苗)/.test(primaryText)
+      ? 90
+      : /(?:预防接种|接种|疫苗)/.test(fullText) ? 12 : -18;
+    if (/五四/.test(normalizedQuery)) value += /五四/.test(primaryText) ? 55 : -12;
+    if (/海旅/.test(normalizedQuery)) value += /海旅/.test(primaryText) ? 55 : -12;
+  }
+
+  if (/(?:慢病支持|慢病.*中心)/.test(normalizedQuery)) {
+    value += /(?:慢病支持|慢病.*中心)/.test(primaryText)
+      ? 105
+      : /(?:慢病支持|慢病.*中心)/.test(fullText) ? 20 : -15;
+  }
+
+  if (/中医/.test(normalizedQuery)) {
+    value += /(?:中医|中医药)/.test(primaryText)
+      ? 105
+      : /(?:中医|中医药)/.test(fullText) ? 18 : -15;
+    if (/周五/.test(normalizedQuery)) value += /周五/.test(fullText) ? 28 : -8;
+  }
+
+  if (/康复/.test(normalizedQuery)) {
+    value += /康复/.test(primaryText) ? 105 : /康复/.test(fullText) ? 18 : -15;
+  }
+
+  if (/(?:地址|在哪里|在哪儿|去哪|怎么走|电话|号码|联系方式)/.test(normalizedQuery)) {
+    value += /(?:地址|电话|联系方式|便民信息)/.test(primaryText)
+      ? 95
+      : /(?:地址|电话|联系方式)/.test(fullText) ? 16 : -10;
+  }
+
+  if (/(?:能看什么|有口腔|口腔|服务能力|社区医院)/.test(normalizedQuery)) {
+    value += /(?:服务能力|社区医院|口腔)/.test(primaryText)
+      ? 105
+      : /(?:服务能力|社区医院|口腔)/.test(fullText) ? 18 : -12;
+  }
+
+  if (/(?:几个分中心|几个点|分中心|服务点|服务站|网点)/.test(normalizedQuery)) {
+    value += /(?:服务网络|分中心|服务点|服务站)/.test(primaryText)
+      ? 95
+      : /(?:服务网络|分中心|服务点|服务站)/.test(fullText) ? 16 : -10;
+  }
+
+  if (/服务包/.test(normalizedQuery)) {
+    value += /服务包/.test(primaryText) ? 115 : /服务包/.test(fullText) ? 18 : -12;
+  }
+
+  if (/(?:长处方|长期处方)/.test(normalizedQuery)) {
+    value += /(?:长处方|长期处方)/.test(primaryText)
+      ? 90
+      : /(?:长处方|长期处方)/.test(fullText) ? 18 : -10;
+  }
+
+  if (/1\s*\+\s*1\s*\+\s*1/.test(normalizedQuery)) {
+    value += /1\s*\+\s*1\s*\+\s*1/.test(primaryText) ? 100 : 0;
+  }
+
+  return value;
+}
+
 export function scorePublicInfoRecord(item: PublicInfoRecord, query: string) {
   const normalized = normalizeRetrievalQuery(query);
   if (!normalized) return 1;
@@ -61,7 +132,7 @@ export function scorePublicInfoRecord(item: PublicInfoRecord, query: string) {
   const keywords = item.keywords.map((keyword) => normalizeRetrievalQuery(keyword)).filter(Boolean);
   const terms = getRetrievalTerms(query);
 
-  let value = localityAdjustment(item, query);
+  let value = localityAdjustment(item, query) + intentAdjustment(item, query);
   value += title === normalized ? 48 : title.includes(normalized) ? 28 : 0;
   if (content.includes(normalized)) value += 12;
 

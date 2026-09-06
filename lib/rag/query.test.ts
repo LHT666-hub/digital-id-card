@@ -21,4 +21,12 @@ describe("RAG query normalization", () => {
     expect(terms).toContain("家庭医生签约");
     expect(terms).toContain("长期处方");
   });
+
+  it("expands local service-network wording", () => {
+    const terms = getRetrievalTerms("海湾有几个分中心和服务点");
+    expect(terms).toContain("海湾镇");
+    expect(terms).toContain("分中心");
+    expect(terms).toContain("服务点");
+    expect(terms).toContain("服务网络");
+  });
 });
