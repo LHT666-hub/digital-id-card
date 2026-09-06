@@ -1,7 +1,7 @@
 "use client";
 
 import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
-import { LoaderCircle, Mic } from "lucide-react";
+import { LoaderCircle, Mic, Send } from "lucide-react";
 import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 
 type Props = { disabled?: boolean; onTranscript: (text: string) => void; onFallback?: () => void };
@@ -212,29 +212,39 @@ export function HoldToTalkButton({ disabled = false, onTranscript, onFallback }:
         : "按住说话";
 
   return (
-    <button
-      type="button"
-      disabled={disabled || serverState === "transcribing"}
-      aria-label="按住说话，松开转文字"
-      onPointerDown={handlePointerDown}
-      onPointerUp={(event) => { event.preventDefault(); finish(); }}
-      onPointerCancel={finish}
-      onLostPointerCapture={finish}
-      onKeyDown={handleKeyDown}
-      onKeyUp={handleKeyUp}
-      onContextMenu={(event) => event.preventDefault()}
-      className={`ios-pressable flex h-12 min-w-0 flex-1 touch-none select-none items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition ${recording || processing
-        ? "border-danger/25 bg-risk-strong text-danger shadow-[0_0_0_5px_rgba(164,74,63,0.08)]"
-        : failed ? "border-danger/20 bg-risk-soft text-danger" : "border-line bg-surface-card text-navy"} disabled:opacity-60`}
-    >
-      {processing ? <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" /> : recording ? (
-        <span className="flex h-5 items-center gap-1" aria-hidden="true">
-          {[10, 18, 14, 20].map((height, index) => (
-            <span key={height} className="wave-bar wave-bar-live w-1 bg-danger" style={{ height, animationDelay: `${index * 90}ms` }} />
-          ))}
-        </span>
-      ) : <Mic className="h-4 w-4 shrink-0" />}
-      <span className="truncate">{label}</span>
-    </button>
+    <>
+      <button
+        type="button"
+        disabled={disabled || serverState === "transcribing"}
+        aria-label="按住说话，松开转文字"
+        onPointerDown={handlePointerDown}
+        onPointerUp={(event) => { event.preventDefault(); finish(); }}
+        onPointerCancel={finish}
+        onLostPointerCapture={finish}
+        onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
+        onContextMenu={(event) => event.preventDefault()}
+        className={`ios-pressable flex h-12 min-w-0 flex-1 touch-none select-none items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition ${recording || processing
+          ? "border-danger/25 bg-risk-strong text-danger shadow-[0_0_0_5px_rgba(164,74,63,0.08)]"
+          : failed ? "border-danger/20 bg-risk-soft text-danger" : "border-line bg-surface-card text-navy"} disabled:opacity-60`}
+      >
+        {processing ? <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" /> : recording ? (
+          <span className="flex h-5 items-center gap-1" aria-hidden="true">
+            {[10, 18, 14, 20].map((height, index) => (
+              <span key={height} className="wave-bar wave-bar-live w-1 bg-danger" style={{ height, animationDelay: `${index * 90}ms` }} />
+            ))}
+          </span>
+        ) : <Mic className="h-4 w-4 shrink-0" />}
+        <span className="truncate">{label}</span>
+      </button>
+      <button
+        type="submit"
+        disabled={disabled}
+        aria-label="发送"
+        className="ios-pressable flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy text-white shadow-[0_10px_22px_rgba(16,42,67,0.2)] disabled:opacity-40"
+      >
+        <Send className="h-4 w-4" />
+      </button>
+    </>
   );
 }
