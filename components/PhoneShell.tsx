@@ -25,6 +25,7 @@ export function PhoneShell({
   const [viewportState, setViewportState] = useState<{
     height: number;
     width: number;
+    offsetTop: number;
     keyboardOpen: boolean;
   } | null>(null);
   const shouldHideBottomNav = pathname === "/group";
@@ -39,9 +40,11 @@ export function PhoneShell({
     document.documentElement.style.overflow = "hidden";
     const updateViewport = () => {
       const height = Math.round(viewport?.height ?? window.innerHeight);
+      const offsetTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
       setViewportState({
         height,
         width: Math.round(viewport?.width ?? window.innerWidth),
+        offsetTop,
         keyboardOpen: height < window.innerHeight - 120,
       });
     };
@@ -61,6 +64,7 @@ export function PhoneShell({
   const fixedViewportStyle =
     contentMode === "fixed" && viewportState
       ? {
+          top: `${viewportState.offsetTop}px`,
           height: `${viewportState.height}px`,
           minHeight: `${viewportState.height}px`,
           width: `${viewportState.width}px`,
