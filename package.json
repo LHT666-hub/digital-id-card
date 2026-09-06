@@ -34,6 +34,7 @@
     "eval:ask": "node scripts/ask-eval.mjs",
     "sync:official-knowledge": "node --env-file-if-exists=.env.production.local scripts/sync-official-knowledge.mjs",
     "sync:official-knowledge:dry": "node scripts/sync-official-knowledge.mjs --dry-run",
+    "import:medical-ontology": "node --env-file-if-exists=.env.production.local scripts/import-medical-entity-ontology.mjs",
     "bootstrap:local": "node --env-file=.env.local scripts/bootstrap-local.mjs",
     "verify:onboarding": "node --env-file=.env.local scripts/verify-onboarding-flow.mjs",
     "verify:operations": "node --env-file=.env.local scripts/verify-operational-lifecycle.mjs",

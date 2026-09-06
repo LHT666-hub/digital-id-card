@@ -1,0 +1,118 @@
+[
+  {
+    "id": "nhc-official",
+    "name": "国家卫生健康委员会",
+    "kind": "official_guideline_policy",
+    "authorityTier": "A",
+    "licenseOrTerms": "official-public-information",
+    "status": "approved_grounding",
+    "allowedUses": ["patient_grounding", "staff_grounding", "policy_rag", "evaluation"],
+    "reviewRequired": true,
+    "notes": "国家级指南、规范、标准、政策及公开解读。入库必须保存原文URL、发布日期、核验日期和有效期。"
+  },
+  {
+    "id": "nmpa-official",
+    "name": "国家药品监督管理局 / 官方药品信息",
+    "kind": "official_drug_reference",
+    "authorityTier": "A",
+    "licenseOrTerms": "official-public-information",
+    "status": "approved_grounding",
+    "allowedUses": ["drug_entity_reference", "patient_grounding", "staff_grounding", "evaluation"],
+    "reviewRequired": true,
+    "notes": "药品通用名、批准信息、说明书等优先使用官方来源；涉及个体用药调整仍必须进入医疗安全边界。"
+  },
+  {
+    "id": "shanghai-health-official",
+    "name": "上海市人民政府 / 上海市卫生健康委员会",
+    "kind": "official_local_policy",
+    "authorityTier": "A",
+    "licenseOrTerms": "official-public-information",
+    "status": "approved_grounding",
+    "allowedUses": ["patient_grounding", "staff_grounding", "local_policy_rag", "evaluation"],
+    "reviewRequired": true,
+    "notes": "上海家庭医生、慢病、基层卫生等政策优先于国家通用表述回答上海落地问题。"
+  },
+  {
+    "id": "fengxian-official",
+    "name": "奉贤区人民政府 / 奉贤区卫生健康委员会",
+    "kind": "official_local_service",
+    "authorityTier": "A",
+    "licenseOrTerms": "official-public-information",
+    "status": "approved_grounding",
+    "allowedUses": ["patient_grounding", "staff_grounding", "local_service_rag", "evaluation"],
+    "reviewRequired": true,
+    "notes": "奉贤、海湾、南桥的活动、地址、门诊时间和服务能力；高频变动信息必须设置短有效期。"
+  },
+  {
+    "id": "hint-lab-chinese-medical-kg",
+    "name": "hint-lab/chinese-medical-kg",
+    "kind": "medical_ontology_entity_linking",
+    "authorityTier": "B",
+    "licenseOrTerms": "MIT",
+    "status": "approved_supporting",
+    "repository": "https://github.com/hint-lab/chinese-medical-kg",
+    "allowedUses": ["entity_linking", "drug_alias_normalization", "disease_alias_normalization", "query_expansion", "evaluation"],
+    "forbiddenUses": ["standalone_patient_clinical_grounding", "automatic_treatment_recommendation"],
+    "reviewRequired": true,
+    "notes": "项目声明含NMPA药物、ICD-10疾病及别名/模糊匹配能力。作为实体标准化层使用；真正患者答案仍回到已审核指南、说明书和机构知识。"
+  },
+  {
+    "id": "huatuo26m-encyclopedia",
+    "name": "Huatuo-26M Encyclopedia / Knowledge Graph subsets",
+    "kind": "medical_qa_auxiliary",
+    "authorityTier": "C",
+    "licenseOrTerms": "Apache-2.0",
+    "status": "approved_research_auxiliary",
+    "repository": "https://github.com/FreedomIntelligence/Huatuo-26M",
+    "allowedUses": ["query_expansion", "medical_qa_evaluation", "candidate_fact_discovery", "language_coverage"],
+    "forbiddenUses": ["direct_unreviewed_patient_grounding", "automatic_diagnosis", "automatic_treatment_recommendation"],
+    "reviewRequired": true,
+    "notes": "百科和知识图谱子集可用于发现术语、问法和待审核事实；未经权威来源复核不得直接进入居民端可信知识。"
+  },
+  {
+    "id": "huatuo26m-consultation",
+    "name": "Huatuo-26M Consultation subset",
+    "kind": "resident_language_evaluation",
+    "authorityTier": "D",
+    "licenseOrTerms": "Apache-2.0",
+    "status": "evaluation_only",
+    "repository": "https://github.com/FreedomIntelligence/Huatuo-26M",
+    "allowedUses": ["query_paraphrase_mining", "intent_examples", "retrieval_evaluation"],
+    "forbiddenUses": ["patient_grounding", "clinical_fact_import", "treatment_recommendation"],
+    "reviewRequired": false,
+    "notes": "在线咨询问答主要学习真实患者如何表达问题，不把回答文本作为临床事实来源。"
+  },
+  {
+    "id": "ragflow-methodology",
+    "name": "infiniflow/RAGFlow",
+    "kind": "rag_methodology",
+    "authorityTier": "methodology",
+    "licenseOrTerms": "Apache-2.0",
+    "status": "reference_only",
+    "repository": "https://github.com/infiniflow/ragflow",
+    "allowedUses": ["retrieval_design", "retrieval_test_design", "hybrid_search_reference"],
+    "notes": "借鉴检索测试、混合召回、阈值和重排思路，不整体引入运行框架。"
+  },
+  {
+    "id": "qanything-methodology",
+    "name": "netease-youdao/QAnything",
+    "kind": "rag_methodology",
+    "authorityTier": "methodology",
+    "licenseOrTerms": "AGPL-3.0",
+    "status": "reference_only",
+    "repository": "https://github.com/netease-youdao/QAnything",
+    "allowedUses": ["two_stage_retrieval_reference", "chinese_rag_reference"],
+    "forbiddenUses": ["code_copy_without_license_review"],
+    "notes": "只借鉴中文两阶段召回/重排架构思想；若复制或修改其代码必须单独评估AGPL义务。"
+  },
+  {
+    "id": "medrag-methodology",
+    "name": "MedRAG Toolkit",
+    "kind": "medical_rag_methodology",
+    "authorityTier": "methodology",
+    "licenseOrTerms": "review-before-code-reuse",
+    "status": "reference_only",
+    "allowedUses": ["medical_retrieval_architecture", "benchmark_design", "retriever_comparison"],
+    "notes": "借鉴Corpus / Retriever / LLM分层及医学检索评测方法；任何语料和代码复用前单独核验其来源与许可证。"
+  }
+]

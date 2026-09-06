@@ -1,4 +1,5 @@
 import { getEmbeddingProvider, vectorToSql } from "@/lib/rag/embeddings";
+import { resolveMedicalEntityTerms } from "@/lib/rag/entityLinking";
 import { expandRetrievalQuery } from "@/lib/rag/query";
 import { rerankKnowledgeHits } from "@/lib/rag/reranker";
 import type { KnowledgeSearchHit, KnowledgeVisibility, RagSupabaseClient } from "@/lib/rag/types";
@@ -37,15 +38,21 @@ export async function searchKnowledge(input: {
 
   const finalLimit = Math.min(Math.max(input.limit ?? 8, 1), 20);
   const candidateLimit = Math.min(Math.max(finalLimit * 3, 12), 20);
-  const retrievalQuery = expandRetrievalQuery(query) || query;
+  const baseRetrievalQuery = expandRetrievalQuery(query) || query;
 
-  let queryEmbedding: string | null = null;
-  try {
-    const provider = getEmbeddingProvider();
-    if (provider) queryEmbedding = vectorToSql((await provider.embedMany([retrievalQuery]))[0]);
-  } catch {
-    queryEmbedding = null;
-  }
+  const embeddingPromise = (async () => {
+    try {
+      const provider = getEmbeddingProvider();
+      if (!provider) return null;
+      return vectorToSql((await provider.embedMany([baseRetrievalQuery]))[0]);
+    } catch {
+      return null;
+    }
+  })();
+  const entityPromise = resolveMedicalEntityTerms(input.supabase, query, 5);
+
+  const [queryEmbedding, entityResolution] = await Promise.all([embeddingPromise, entityPromise]);
+  const retrievalQuery = [baseRetrievalQuery, ...entityResolution.terms].filter(Boolean).join(" ");
 
   const { data, error } = await input.supabase.rpc("search_knowledge_chunks", {
     p_query_text: retrievalQuery,
