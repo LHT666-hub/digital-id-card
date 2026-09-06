@@ -63,6 +63,15 @@ function createOpenAiCompatibleProvider(): EmbeddingProvider {
   };
 }
 
+function hasConfiguredEmbeddingModel() {
+  try {
+    const config = getEmbeddingModelConfig();
+    return Boolean(config.apiKey && config.baseURL && config.model);
+  } catch {
+    return false;
+  }
+}
+
 export function getEmbeddingProvider(): EmbeddingProvider | null {
   const selected = process.env.RAG_EMBEDDING_PROVIDER?.trim().toLowerCase();
   if (selected === "disabled") return null;
@@ -73,7 +82,14 @@ export function getEmbeddingProvider(): EmbeddingProvider | null {
     }
     return createDeterministicEmbeddingProvider();
   }
-  return process.env.NODE_ENV === "test" ? createDeterministicEmbeddingProvider() : null;
+
+  if (process.env.NODE_ENV === "test") return createDeterministicEmbeddingProvider();
+
+  // If the app already has a Bailian/OpenAI-compatible embedding configuration
+  // (for Bailian this reuses DASHSCOPE_API_KEY + text-embedding-v4), enable
+  // semantic retrieval by default. `RAG_EMBEDDING_PROVIDER=disabled` remains
+  // the explicit kill switch.
+  return hasConfiguredEmbeddingModel() ? createOpenAiCompatibleProvider() : null;
 }
 
 export function vectorToSql(vector: number[]) {
