@@ -15,7 +15,17 @@ async function run(request: NextRequest) {
   if (!supabase) return apiError("SERVICE_NOT_CONFIGURED", "服务端数据库尚未配置。", 503, traceId);
 
   try {
-    const results = await processPendingKnowledgeJobs({ supabase, traceId, limit: 10 });
+    const results = [];
+    const batchSize = 10;
+    for (let batch = 0; batch < 4; batch += 1) {
+      const current = await processPendingKnowledgeJobs({
+        supabase,
+        traceId: batch ? `${traceId}:${batch + 1}` : traceId,
+        limit: batchSize,
+      });
+      results.push(...current);
+      if (current.length < batchSize) break;
+    }
     return apiOk({
       claimed: results.length,
       completed: results.filter((item) => item.ok).length,
