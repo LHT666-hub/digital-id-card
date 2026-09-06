@@ -153,6 +153,7 @@ export async function analyzeMedicalDocumentImage(
           ],
         },
       ],
+      ...(config.provider === "aliyun_bailian" ? { enable_thinking: false } : {}),
     },
     { signal: AbortSignal.timeout(45_000) },
   );
