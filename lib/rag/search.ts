@@ -29,6 +29,25 @@ export function shouldSearchInstitutionalKnowledge(question: string) {
   return p0Disease.test(normalized) && managementCue.test(normalized);
 }
 
+export function filterConfidentKnowledgeHits(hits: KnowledgeSearchHit[]) {
+  if (!hits.length) return [];
+
+  const rerankMin = Number(process.env.RAG_RERANK_MIN_SCORE ?? 0.35);
+  const lexicalMin = Number(process.env.RAG_LEXICAL_MIN_SCORE ?? 0.12);
+  const vectorMin = Number(process.env.RAG_VECTOR_MIN_SCORE ?? 0.5);
+  const top = hits[0];
+  const topIsConfident = top.rerankScore !== undefined
+    ? top.rerankScore >= rerankMin
+    : top.textScore >= lexicalMin || top.vectorScore >= vectorMin;
+
+  if (!topIsConfident) return [];
+
+  return hits.filter((hit) => hit.rerankScore !== undefined
+    ? hit.rerankScore >= Math.max(0.2, rerankMin * 0.6)
+    : hit.textScore >= Math.max(0.08, lexicalMin * 0.65)
+      || hit.vectorScore >= Math.max(0.42, vectorMin * 0.84));
+}
+
 export async function searchKnowledge(input: {
   supabase: RagSupabaseClient;
   query: string;
@@ -82,7 +101,7 @@ export async function searchKnowledge(input: {
     vectorScore: Number(row.vector_score ?? 0), combinedScore: Number(row.combined_score ?? 0),
   }));
 
-  return rerankKnowledgeHits(query, hits, finalLimit);
+  return filterConfidentKnowledgeHits(await rerankKnowledgeHits(query, hits, finalLimit));
 }
 
 export function buildKnowledgeCitations(hits: KnowledgeSearchHit[]) {
